@@ -14,10 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.R
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AuthViewModel
 
@@ -42,11 +45,12 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
         ) {
             Spacer(Modifier.height(48.dp))
 
-            Box(
-                Modifier.size(80.dp).clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(0.2f)),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.AccountBalance, null, tint = Color.White, modifier = Modifier.size(44.dp)) }
+            Image(
+                painter = painterResource(R.drawable.app_logo),
+                contentDescription = "لوگوی بانک‌یار",
+                modifier = Modifier.size(100.dp).clip(RoundedCornerShape(24.dp)),
+                contentScale = ContentScale.Fit
+            )
 
             Spacer(Modifier.height(16.dp))
             Text("بانک‌یار", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)

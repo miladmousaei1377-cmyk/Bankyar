@@ -1,6 +1,5 @@
 package com.bankyar.ui.screens
 
-import android.app.DatePickerDialog
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,7 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -25,7 +23,6 @@ import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
-import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,8 +47,8 @@ fun AddTransactionScreen(
     var accountDropdownExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showJalaliPicker by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
     val accounts by accountsViewModel.accounts.collectAsState()
 
     LaunchedEffect(existing) {
@@ -61,6 +58,14 @@ fun AddTransactionScreen(
             description = it.description; accountName = it.accountName
             selectedDateMillis = it.date
         }
+    }
+
+    if (showJalaliPicker) {
+        JalaliDatePickerDialog(
+            currentMillis = selectedDateMillis,
+            onConfirm = { millis -> selectedDateMillis = millis; showJalaliPicker = false },
+            onDismiss = { showJalaliPicker = false }
+        )
     }
 
     val isEdit = editId > 0
@@ -234,22 +239,7 @@ fun AddTransactionScreen(
                     label = { Text("تاریخ") },
                     leadingIcon = { Icon(Icons.Default.DateRange, null, tint = MaterialTheme.colorScheme.primary) },
                     trailingIcon = {
-                        IconButton(onClick = {
-                            val cal = Calendar.getInstance().apply { timeInMillis = selectedDateMillis }
-                            DatePickerDialog(
-                                context,
-                                { _, year, month, day ->
-                                    val picked = Calendar.getInstance().apply {
-                                        set(year, month, day, 0, 0, 0)
-                                        set(Calendar.MILLISECOND, 0)
-                                    }
-                                    selectedDateMillis = picked.timeInMillis
-                                },
-                                cal.get(Calendar.YEAR),
-                                cal.get(Calendar.MONTH),
-                                cal.get(Calendar.DAY_OF_MONTH)
-                            ).show()
-                        }) {
+                        IconButton(onClick = { showJalaliPicker = true }) {
                             Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary)
                         }
                     },
@@ -345,3 +335,86 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
     cursorColor = MaterialTheme.colorScheme.primary,
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun JalaliDatePickerDialog(
+    currentMillis: Long,
+    onConfirm: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val jalali = JalaliCalendar.toJalaliShort(currentMillis)
+    val parts = jalali.split("/")
+    var dayText by remember { mutableStateOf(parts.getOrNull(0) ?: "1") }
+    var selectedMonth by remember { mutableStateOf((parts.getOrNull(1)?.toIntOrNull() ?: 1)) }
+    var yearText by remember { mutableStateOf(parts.getOrNull(2) ?: "1403") }
+    var monthExpanded by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("انتخاب تاریخ شمسی", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = yearText,
+                    onValueChange = { yearText = it.filter { c -> c.isDigit() }.take(4) },
+                    label = { Text("سال") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = fieldColors()
+                )
+                ExposedDropdownMenuBox(expanded = monthExpanded, onExpandedChange = { monthExpanded = it }) {
+                    OutlinedTextField(
+                        value = JalaliCalendar.monthNames[selectedMonth - 1],
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("ماه") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(monthExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = fieldColors()
+                    )
+                    ExposedDropdownMenu(expanded = monthExpanded, onDismissRequest = { monthExpanded = false }) {
+                        JalaliCalendar.monthNames.forEachIndexed { idx, name ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = { selectedMonth = idx + 1; monthExpanded = false }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = dayText,
+                    onValueChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
+                    label = { Text("روز") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = fieldColors()
+                )
+                if (errorMsg.isNotBlank())
+                    Text(errorMsg, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val jy = yearText.toIntOrNull() ?: 0
+                val jm = selectedMonth
+                val jd = dayText.toIntOrNull() ?: 0
+                when {
+                    jy < 1300 || jy > 1500 -> errorMsg = "سال نامعتبر است"
+                    jd < 1 || jd > 31 -> errorMsg = "روز نامعتبر است"
+                    else -> {
+                        errorMsg = ""
+                        onConfirm(JalaliCalendar.jalaliToMillis(jy, jm, jd))
+                    }
+                }
+            }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                Text("تأیید", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("انصراف") } }
+    )
+}

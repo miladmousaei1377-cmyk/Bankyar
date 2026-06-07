@@ -127,7 +127,13 @@ fun BankYarNavGraph() {
             ProfileScreen(
                 userId = loggedInUserId,
                 viewModel = profileViewModel,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                }
             )
         }
 

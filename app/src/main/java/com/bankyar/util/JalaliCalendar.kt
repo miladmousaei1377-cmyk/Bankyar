@@ -4,7 +4,7 @@ import java.util.Calendar
 
 object JalaliCalendar {
 
-    private val monthNames = arrayOf(
+    val monthNames = arrayOf(
         "فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور",
         "مهر","آبان","آذر","دی","بهمن","اسفند"
     )
@@ -31,6 +31,34 @@ object JalaliCalendar {
             cal.get(Calendar.DAY_OF_MONTH)
         )
         return "$jd/${jm.toString().padStart(2,'0')}/$jy"
+    }
+
+    fun jalaliToMillis(jy: Int, jm: Int, jd: Int): Long {
+        val jDays = intArrayOf(31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29)
+        var targetDayOffset = jd - 1
+        for (i in 0 until jm - 1) targetDayOffset += jDays[i]
+
+        val gyEst = jy + 621
+        val cal = Calendar.getInstance()
+        var nowruzMillis: Long? = null
+
+        for (dayTry in 19..22) {
+            cal.set(gyEst, 2, dayTry, 0, 0, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val (ty, tm, td) = gregorianToJalali(gyEst, 3, dayTry)
+            if (ty == jy && tm == 1 && td == 1) {
+                nowruzMillis = cal.timeInMillis
+                break
+            }
+        }
+        if (nowruzMillis == null) {
+            cal.set(gyEst, 2, 21, 0, 0, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            nowruzMillis = cal.timeInMillis
+        }
+        cal.timeInMillis = nowruzMillis
+        cal.add(Calendar.DAY_OF_YEAR, targetDayOffset)
+        return cal.timeInMillis
     }
 
     fun gregorianToJalali(gy: Int, gm: Int, gd: Int): Triple<Int, Int, Int> {
