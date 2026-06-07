@@ -20,7 +20,8 @@ object BiometricHelper {
         subtitle: String = "با اثر انگشت وارد شوید",
         negativeText: String = "انصراف",
         onSuccess: () -> Unit,
-        onError: (String) -> Unit = {}
+        onError: (String) -> Unit = {},
+        onFailed: () -> Unit = {}
     ) {
         val executor = ContextCompat.getMainExecutor(activity)
         val prompt = BiometricPrompt(
@@ -34,7 +35,7 @@ object BiometricHelper {
                         onError(msg.toString())
                     }
                 }
-                override fun onAuthenticationFailed() = Unit
+                override fun onAuthenticationFailed() = onFailed()
             }
         )
         prompt.authenticate(

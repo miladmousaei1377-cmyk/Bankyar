@@ -21,22 +21,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.fragment.app.FragmentActivity
 import com.bankyar.R
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AuthViewModel
-import com.bankyar.util.BiometricHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
     val state by viewModel.state.collectAsState()
-    val loggedInUserId by viewModel.loggedInUserId.collectAsState()
-    val biometricEnabled by viewModel.biometricEnabled.collectAsState()
     val context = LocalContext.current
-    val activity = context as? FragmentActivity
     val scope = rememberCoroutineScope()
 
     var isLogin by remember { mutableStateOf(true) }
@@ -55,32 +50,11 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
     var forgotError by remember { mutableStateOf<String?>(null) }
     var forgotLoading by remember { mutableStateOf(false) }
     var resetSuccessMsg by remember { mutableStateOf<String?>(null) }
-    var bioMsg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.success) {
         if (state.success) {
             delay(800)
             onAuthenticated()
-        }
-    }
-
-    fun triggerBiometric() {
-        bioMsg = null
-        when {
-            loggedInUserId <= 0 && !biometricEnabled ->
-                bioMsg = "ابتدا ثبت‌نام کنید"
-            loggedInUserId <= 0 ->
-                bioMsg = "ابتدا ثبت‌نام کنید"
-            !biometricEnabled ->
-                bioMsg = "اثر انگشت در تنظیمات فعال نشده است"
-            activity != null && BiometricHelper.canAuthenticate(context) ->
-                BiometricHelper.showPrompt(
-                    activity = activity,
-                    onSuccess = { viewModel.activateSession(); onAuthenticated() },
-                    onError = { msg -> bioMsg = msg }
-                )
-            else ->
-                bioMsg = "اثر انگشت در دستگاه پشتیبانی نمی‌شود"
         }
     }
 
@@ -128,7 +102,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                     Box(
                                         Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                                             .background(if (isLogin == isLoginTab) Primary else Color.Transparent)
-                                            .clickable { isLogin = isLoginTab; viewModel.clearError(); bioMsg = null }
+                                            .clickable { isLogin = isLoginTab; viewModel.clearError() }
                                             .padding(vertical = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -236,7 +210,6 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                             Button(
                                 onClick = {
                                     resetSuccessMsg = null
-                                    bioMsg = null
                                     if (isLogin) viewModel.login(phone, pin)
                                     else viewModel.register(name, phone, pin)
                                 },
@@ -270,30 +243,6 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                         }
                     }
 
-                    // Fingerprint section below card
-                    Spacer(Modifier.height(20.dp))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            Modifier
-                                .size(60.dp)
-                                .clip(RoundedCornerShape(30.dp))
-                                .background(Color.White.copy(alpha = 0.18f))
-                                .clickable { triggerBiometric() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Fingerprint, null,
-                                tint = if (biometricEnabled && loggedInUserId > 0) Color.White else Color.White.copy(0.5f),
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text("ورود با اثر انگشت", color = Color.White.copy(0.8f), fontSize = 12.sp)
-                        bioMsg?.let { msg ->
-                            Spacer(Modifier.height(6.dp))
-                            Text(msg, color = Color(0xFFFFCDD2), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
                 }
 
                 1 -> {

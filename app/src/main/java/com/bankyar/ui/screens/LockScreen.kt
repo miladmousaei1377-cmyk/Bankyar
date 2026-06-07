@@ -52,10 +52,12 @@ fun LockScreen(
 
     fun triggerBiometric() {
         if (activity == null || !showBiometric) return
+        error = null
         BiometricHelper.showPrompt(
             activity = activity,
             onSuccess = onUnlocked,
-            onError = { msg -> error = msg }
+            onError = { error = "شناسایی نشد" },
+            onFailed = { error = "شناسایی نشد" }
         )
     }
 
