@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, claude/project-updates-features-TMW5P ]
   workflow_dispatch:
 
 jobs:
