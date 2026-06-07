@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
     object Auth : Screen("auth")
+    object Lock : Screen("lock")
     object Home : Screen("home")
     object Transactions : Screen("transactions")
     object AddTransaction : Screen("add?editId={editId}") {
@@ -44,6 +45,8 @@ fun BankYarNavGraph() {
     val themeViewModel: ThemeViewModel = viewModel()
 
     val loggedInUserId by authViewModel.loggedInUserId.collectAsState()
+    val isSessionActive by authViewModel.isSessionActive.collectAsState()
+    val biometricEnabled by authViewModel.biometricEnabled.collectAsState()
     val isDarkMode by themeViewModel.isDarkMode.collectAsState()
     val context = LocalContext.current
     var userName by remember { mutableStateOf("کاربر") }
@@ -58,15 +61,25 @@ fun BankYarNavGraph() {
         }
     }
 
-    val startDest = if (loggedInUserId > 0) Screen.Home.route else Screen.Auth.route
+    // Determine start destination based on session state
+    val startDest = when {
+        loggedInUserId > 0 && isSessionActive -> Screen.Home.route
+        loggedInUserId > 0 -> Screen.Lock.route
+        else -> Screen.Auth.route
+    }
 
-    // Auto-navigate to Auth when userId drops to -1 (e.g. after logout)
-    LaunchedEffect(loggedInUserId) {
-        if (loggedInUserId <= 0) {
-            val currentRoute = navController.currentBackStackEntry?.destination?.route
-            if (currentRoute != null && currentRoute != Screen.Auth.route) {
-                navController.navigate(Screen.Auth.route) {
-                    popUpTo(0) { inclusive = true }
+    // React to auth/session state changes
+    LaunchedEffect(loggedInUserId, isSessionActive) {
+        val current = navController.currentBackStackEntry?.destination?.route
+        when {
+            loggedInUserId <= 0 -> {
+                if (current != null && current != Screen.Auth.route) {
+                    navController.navigate(Screen.Auth.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+            loggedInUserId > 0 && !isSessionActive -> {
+                if (current != null && current != Screen.Lock.route && current != Screen.Auth.route) {
+                    navController.navigate(Screen.Lock.route) { popUpTo(0) { inclusive = true } }
                 }
             }
         }
@@ -82,8 +95,28 @@ fun BankYarNavGraph() {
             }
         }
 
+        composable(Screen.Lock.route) {
+            LockScreen(
+                userId = loggedInUserId,
+                userName = userName,
+                biometricEnabled = biometricEnabled,
+                onUnlocked = {
+                    authViewModel.activateSession()
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onSwitchAccount = {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                    authViewModel.logout()
+                }
+            )
+        }
+
         composable(Screen.Home.route) {
-            if (loggedInUserId > 0) {
+            if (loggedInUserId > 0 && isSessionActive) {
                 HomeScreen(
                     userId = loggedInUserId,
                     userName = userName,
@@ -100,7 +133,6 @@ fun BankYarNavGraph() {
                     onSettings = { navController.navigate(Screen.Settings.route) }
                 )
             } else {
-                // Blank placeholder while LaunchedEffect redirects to Auth
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
             }
         }
@@ -145,7 +177,6 @@ fun BankYarNavGraph() {
                 viewModel = profileViewModel,
                 onBack = { navController.popBackStack() },
                 onLogout = {
-                    // Navigate first, then clear session — avoids white screen race
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -177,6 +208,8 @@ fun BankYarNavGraph() {
         composable(Screen.Settings.route) {
             SettingsScreen(
                 userId = loggedInUserId,
+                biometricEnabled = biometricEnabled,
+                onBiometricToggle = { authViewModel.setBiometricEnabled(it) },
                 onBack = { navController.popBackStack() }
             )
         }

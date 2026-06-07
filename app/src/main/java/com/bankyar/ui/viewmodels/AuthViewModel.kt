@@ -23,8 +23,15 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(AuthState())
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
+    // In-memory only — resets to false on every process start (app close/reopen)
+    private val _isSessionActive = MutableStateFlow(false)
+    val isSessionActive: StateFlow<Boolean> = _isSessionActive.asStateFlow()
+
     val loggedInUserId: StateFlow<Int> = prefs.loggedInUserId
         .stateIn(viewModelScope, SharingStarted.Eagerly, -1)
+
+    val biometricEnabled: StateFlow<Boolean> = prefs.biometricEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun register(name: String, phone: String, pin: String) {
         if (name.isBlank() || phone.isBlank() || pin.isBlank()) {
@@ -48,6 +55,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
             }
             val id = repo.register(User(name = name, phone = phone, pin = pin))
             prefs.saveUserId(id.toInt())
+            _isSessionActive.value = true
             _state.value = AuthState(success = true)
         }
     }
@@ -64,13 +72,23 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 _state.value = AuthState(error = "شماره یا رمز عبور اشتباه است")
             } else {
                 prefs.saveUserId(user.id)
+                _isSessionActive.value = true
                 _state.value = AuthState(success = true)
             }
         }
     }
 
+    fun activateSession() {
+        _isSessionActive.value = true
+    }
+
     fun logout() {
+        _isSessionActive.value = false
         viewModelScope.launch { prefs.clearUserId() }
+    }
+
+    fun setBiometricEnabled(enabled: Boolean) = viewModelScope.launch {
+        prefs.setBiometricEnabled(enabled)
     }
 
     fun clearError() {

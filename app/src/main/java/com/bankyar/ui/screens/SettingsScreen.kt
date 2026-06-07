@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import androidx.work.*
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.data.database.entities.BankAccount
@@ -25,6 +26,7 @@ import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.util.BackupWorker
+import com.bankyar.util.BiometricHelper
 import com.bankyar.util.JalaliCalendar
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -33,7 +35,12 @@ import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(userId: Int, onBack: () -> Unit) {
+fun SettingsScreen(
+    userId: Int,
+    biometricEnabled: Boolean,
+    onBiometricToggle: (Boolean) -> Unit,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -145,6 +152,66 @@ fun SettingsScreen(userId: Int, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp
                     )
+                }
+            }
+
+            // Biometric card
+            val biometricAvailable = remember { BiometricHelper.canAuthenticate(context) }
+            val activity = context as? FragmentActivity
+            var biometricPending by remember { mutableStateOf(false) }
+
+            SettingsCard(title = "امنیت") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Fingerprint, null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    "ورود با اثر انگشت",
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    if (!biometricAvailable) "دستگاه پشتیبانی نمی‌کند"
+                                    else if (biometricEnabled) "فعال است"
+                                    else "غیرفعال است",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = biometricEnabled,
+                            enabled = biometricAvailable && !biometricPending,
+                            onCheckedChange = { wantEnabled ->
+                                if (wantEnabled && activity != null) {
+                                    biometricPending = true
+                                    BiometricHelper.showPrompt(
+                                        activity = activity,
+                                        title = "تأیید اثر انگشت",
+                                        subtitle = "برای فعال‌سازی اثر انگشت خود را اسکن کنید",
+                                        negativeText = "انصراف",
+                                        onSuccess = {
+                                            onBiometricToggle(true)
+                                            biometricPending = false
+                                        },
+                                        onError = { biometricPending = false }
+                                    )
+                                } else {
+                                    onBiometricToggle(false)
+                                }
+                            }
+                        )
+                    }
                 }
             }
 

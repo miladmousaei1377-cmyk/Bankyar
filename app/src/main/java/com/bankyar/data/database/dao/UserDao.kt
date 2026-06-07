@@ -18,6 +18,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
     fun getUserById(id: Int): Flow<User?>
 
+    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Int): User?
+
     @Update
     suspend fun update(user: User)
 }
