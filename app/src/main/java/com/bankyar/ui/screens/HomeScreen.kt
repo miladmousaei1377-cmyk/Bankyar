@@ -16,10 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.R
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.ui.components.formatAmount
@@ -93,14 +96,16 @@ fun HomeScreen(
                     Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).padding(24.dp)
                 ) {
                     Column {
-                        Box(
-                            Modifier.size(60.dp).clip(CircleShape)
-                                .background(Color.White.copy(0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(userName.firstOrNull()?.toString() ?: "؟",
-                                color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Image(
+                            painter = painterResource(R.drawable.app_logo),
+                            contentDescription = "بانک‌یار",
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White)
+                                .padding(4.dp),
+                            contentScale = ContentScale.Fit
+                        )
                         Spacer(Modifier.height(10.dp))
                         Text(userName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Text("بانک‌یار", color = Color.White.copy(0.7f), fontSize = 12.sp)

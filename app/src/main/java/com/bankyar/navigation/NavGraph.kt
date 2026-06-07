@@ -1,5 +1,9 @@
 package com.bankyar.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -9,6 +13,7 @@ import com.bankyar.data.database.AppDatabase
 import com.bankyar.data.repository.UserRepository
 import com.bankyar.ui.screens.*
 import com.bankyar.ui.viewmodels.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
@@ -94,6 +99,9 @@ fun BankYarNavGraph() {
                     onAbout = { navController.navigate(Screen.About.route) },
                     onSettings = { navController.navigate(Screen.Settings.route) }
                 )
+            } else {
+                // Blank placeholder while LaunchedEffect redirects to Auth
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
             }
         }
 
@@ -137,10 +145,11 @@ fun BankYarNavGraph() {
                 viewModel = profileViewModel,
                 onBack = { navController.popBackStack() },
                 onLogout = {
-                    authViewModel.logout()
+                    // Navigate first, then clear session — avoids white screen race
                     navController.navigate(Screen.Auth.route) {
-                        popUpTo(Screen.Home.route) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
+                    authViewModel.logout()
                 }
             )
         }

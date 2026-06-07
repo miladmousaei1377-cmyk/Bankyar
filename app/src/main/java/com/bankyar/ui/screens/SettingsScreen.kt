@@ -1,6 +1,5 @@
 package com.bankyar.ui.screens
 
-import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,19 +19,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.work.*
-import com.bankyar.data.PreferencesManager
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.util.BackupWorker
+import com.bankyar.util.JalaliCalendar
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,18 +39,32 @@ fun SettingsScreen(userId: Int, onBack: () -> Unit) {
     val snackbarHostState = remember { SnackbarHostState() }
 
     var autoBackupEnabled by remember { mutableStateOf(false) }
-    var lastBackupTime by remember { mutableStateOf("") }
+    var lastAutoBackupTime by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        val backupFile = File(context.getExternalFilesDir(null), BackupWorker.BACKUP_FILE_NAME)
+        val backupFile = BackupWorker.getAutoBackupFile(context)
         if (backupFile.exists()) {
-            val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
-            lastBackupTime = sdf.format(Date(backupFile.lastModified()))
+            lastAutoBackupTime = JalaliCalendar.toJalaliString(backupFile.lastModified())
         }
         val workInfo = WorkManager.getInstance(context)
             .getWorkInfosForUniqueWork(BackupWorker.WORK_NAME).get()
         autoBackupEnabled = workInfo.isNotEmpty() && workInfo.any {
             it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
+        }
+    }
+
+    val manualBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            try {
+                val json = BackupWorker.buildBackupJson(context, userId)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                snackbarHostState.showSnackbar("بکاپ با موفقیت ذخیره شد")
+            } catch (e: Exception) {
+                snackbarHostState.showSnackbar("خطا در بکاپ: ${e.message}")
+            }
         }
     }
 
@@ -97,34 +107,11 @@ fun SettingsScreen(userId: Int, onBack: () -> Unit) {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Backup card
-            SettingsCard(title = "پشتیبان‌گیری") {
+            // Manual backup card
+            SettingsCard(title = "پشتیبان‌گیری دستی") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (lastBackupTime.isNotEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.History, null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("آخرین بکاپ: $lastBackupTime",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp)
-                        }
-                    }
                     Button(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    performBackup(context, userId)
-                                    val backupFile = File(context.getExternalFilesDir(null), BackupWorker.BACKUP_FILE_NAME)
-                                    val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
-                                    lastBackupTime = sdf.format(Date(backupFile.lastModified()))
-                                    snackbarHostState.showSnackbar("بکاپ با موفقیت ذخیره شد")
-                                } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar("خطا در بکاپ: ${e.message}")
-                                }
-                            }
-                        },
+                        onClick = { manualBackupLauncher.launch("bankyar_backup.json") },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -134,7 +121,7 @@ fun SettingsScreen(userId: Int, onBack: () -> Unit) {
                         Text("پشتیبان‌گیری اکنون", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                     Text(
-                        "فایل بکاپ در حافظه داخلی گوشی ذخیره می‌شود",
+                        "شما مکان ذخیره‌سازی را انتخاب می‌کنید",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp
                     )
@@ -173,7 +160,7 @@ fun SettingsScreen(userId: Int, onBack: () -> Unit) {
                             Text("پشتیبان‌گیری هر ۳۰ دقیقه",
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface)
-                            Text("فایل قبلی جایگزین می‌شود",
+                            Text("پوشه bankyar در حافظه داخلی",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp)
                         }
@@ -183,18 +170,30 @@ fun SettingsScreen(userId: Int, onBack: () -> Unit) {
                                 autoBackupEnabled = enabled
                                 if (enabled) {
                                     scheduleAutoBackup(context)
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد")
-                                    }
+                                    scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
                                 } else {
                                     cancelAutoBackup(context)
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار غیرفعال شد")
-                                    }
+                                    scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار غیرفعال شد") }
                                 }
                             }
                         )
                     }
+                    if (lastAutoBackupTime.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.History, null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("آخرین بکاپ خودکار: $lastAutoBackupTime",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp)
+                        }
+                    }
+                    Text(
+                        "مسیر: Android/data/com.bankyar/files/bankyar/auto_backup.json",
+                        color = MaterialTheme.colorScheme.outline,
+                        fontSize = 10.sp
+                    )
                 }
             }
         }
@@ -217,58 +216,7 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
     }
 }
 
-private suspend fun performBackup(context: Context, userId: Int) {
-    val db = AppDatabase.getInstance(context)
-    val user = db.userDao().getUserById(userId).first() ?: return
-    val transactions = db.transactionDao().getAllByUser(userId).first()
-    val accounts = db.bankAccountDao().getAllByUser(userId).first()
-
-    val json = JSONObject().apply {
-        put("version", 1)
-        put("timestamp", System.currentTimeMillis())
-        put("user", JSONObject().apply {
-            put("id", user.id)
-            put("name", user.name)
-            put("phone", user.phone)
-            put("pin", user.pin)
-            put("createdAt", user.createdAt)
-        })
-        put("transactions", org.json.JSONArray().apply {
-            transactions.forEach { t ->
-                put(JSONObject().apply {
-                    put("id", t.id)
-                    put("userId", t.userId)
-                    put("title", t.title)
-                    put("amount", t.amount)
-                    put("type", t.type.name)
-                    put("category", t.category.name)
-                    put("description", t.description)
-                    put("date", t.date)
-                    put("accountName", t.accountName)
-                })
-            }
-        })
-        put("accounts", org.json.JSONArray().apply {
-            accounts.forEach { a ->
-                put(JSONObject().apply {
-                    put("id", a.id)
-                    put("userId", a.userId)
-                    put("title", a.title)
-                    put("bankName", a.bankName)
-                    put("accountNumber", a.accountNumber)
-                    put("cardNumber", a.cardNumber)
-                    put("isDefault", a.isDefault)
-                    put("initialBalance", a.initialBalance)
-                })
-            }
-        })
-    }
-
-    val backupFile = File(context.getExternalFilesDir(null), BackupWorker.BACKUP_FILE_NAME)
-    backupFile.writeText(json.toString(2))
-}
-
-private suspend fun restoreFromJson(context: Context, userId: Int, content: String) {
+private suspend fun restoreFromJson(context: android.content.Context, userId: Int, content: String) {
     val root = JSONObject(content)
     val db = AppDatabase.getInstance(context)
 
@@ -310,7 +258,7 @@ private suspend fun restoreFromJson(context: Context, userId: Int, content: Stri
     }
 }
 
-private fun scheduleAutoBackup(context: Context) {
+private fun scheduleAutoBackup(context: android.content.Context) {
     val request = PeriodicWorkRequestBuilder<BackupWorker>(30, TimeUnit.MINUTES)
         .setConstraints(Constraints.NONE)
         .build()
@@ -321,6 +269,6 @@ private fun scheduleAutoBackup(context: Context) {
     )
 }
 
-private fun cancelAutoBackup(context: Context) {
+private fun cancelAutoBackup(context: android.content.Context) {
     WorkManager.getInstance(context).cancelUniqueWork(BackupWorker.WORK_NAME)
 }

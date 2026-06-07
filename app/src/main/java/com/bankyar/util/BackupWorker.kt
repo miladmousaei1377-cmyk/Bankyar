@@ -17,13 +17,33 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val prefs = PreferencesManager(applicationContext)
             val userId = prefs.loggedInUserId.first()
             if (userId <= 0) return Result.success()
+            val json = buildBackupJson(applicationContext, userId)
+            val file = getAutoBackupFile(applicationContext)
+            file.writeText(json)
+            Result.success()
+        } catch (e: Exception) {
+            Result.retry()
+        }
+    }
 
-            val db = AppDatabase.getInstance(applicationContext)
-            val user = db.userDao().getUserById(userId).first() ?: return Result.success()
+    companion object {
+        const val AUTO_BACKUP_FILE_NAME = "auto_backup.json"
+        const val BACKUP_DIR = "bankyar"
+        const val WORK_NAME = "bankyar_auto_backup"
+
+        fun getAutoBackupFile(context: Context): File {
+            val dir = File(context.getExternalFilesDir(null), BACKUP_DIR)
+            dir.mkdirs()
+            return File(dir, AUTO_BACKUP_FILE_NAME)
+        }
+
+        suspend fun buildBackupJson(context: Context, userId: Int): String {
+            val db = AppDatabase.getInstance(context)
+            val user = db.userDao().getUserById(userId).first() ?: return "{}"
             val transactions = db.transactionDao().getAllByUser(userId).first()
             val accounts = db.bankAccountDao().getAllByUser(userId).first()
 
-            val json = JSONObject().apply {
+            return JSONObject().apply {
                 put("version", 1)
                 put("timestamp", System.currentTimeMillis())
                 put("user", JSONObject().apply {
@@ -62,18 +82,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                         })
                     }
                 })
-            }
-
-            val backupFile = File(applicationContext.getExternalFilesDir(null), BACKUP_FILE_NAME)
-            backupFile.writeText(json.toString(2))
-            Result.success()
-        } catch (e: Exception) {
-            Result.retry()
+            }.toString(2)
         }
-    }
-
-    companion object {
-        const val BACKUP_FILE_NAME = "bankyar_backup.json"
-        const val WORK_NAME = "bankyar_auto_backup"
     }
 }
