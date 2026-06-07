@@ -1,9 +1,9 @@
 package com.bankyar.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -14,10 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,14 +50,12 @@ fun AboutScreen(onBack: () -> Unit) {
         ) {
             Spacer(Modifier.height(8.dp))
 
-            Box(
-                Modifier.size(100.dp).clip(RoundedCornerShape(28.dp))
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.AccountBalance, null,
-                    tint = Color.White, modifier = Modifier.size(56.dp))
-            }
+            Image(
+                painter = painterResource(R.drawable.app_logo),
+                contentDescription = "لوگوی بانک‌یار",
+                modifier = Modifier.size(120.dp).clip(RoundedCornerShape(24.dp)),
+                contentScale = ContentScale.Fit
+            )
 
             Text("بانک‌یار", fontSize = 28.sp, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground)
@@ -92,18 +93,12 @@ fun AboutScreen(onBack: () -> Unit) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("اطلاعات فنی", fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
-                    AboutRow(Icons.Default.Code, "نسخه", "۱.۰.۰")
-                    AboutRow(Icons.Default.Android, "سیستم‌عامل", "Android 8.0+")
-                    AboutRow(Icons.Default.Storage, "پایگاه داده", "Room Database")
-                    AboutRow(Icons.Default.Palette, "رابط کاربری", "Jetpack Compose")
+                    AboutRow(Icons.Default.Code, "نسخه نرم‌افزار", "۱.۰.۰")
                     AboutRow(Icons.Default.Person, "توسعه‌دهنده", "میلاد موسایی")
                 }
             }
 
             Spacer(Modifier.height(8.dp))
-            Text("© ۱۴۰۳ بانک‌یار — ساخته شده با ❤️",
-                color = MaterialTheme.colorScheme.outline, fontSize = 12.sp,
-                textAlign = TextAlign.Center)
         }
     }
 }

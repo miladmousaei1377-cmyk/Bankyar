@@ -1,5 +1,6 @@
 package com.bankyar.ui.screens
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -22,6 +24,8 @@ import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
+import com.bankyar.util.JalaliCalendar
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,7 +49,9 @@ fun AddTransactionScreen(
     var accountName by remember { mutableStateOf("حساب اصلی") }
     var accountDropdownExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
 
+    val context = LocalContext.current
     val accounts by accountsViewModel.accounts.collectAsState()
 
     LaunchedEffect(existing) {
@@ -53,6 +59,7 @@ fun AddTransactionScreen(
             title = it.title; amountText = it.amount.toLong().toString()
             type = it.type; category = it.category
             description = it.description; accountName = it.accountName
+            selectedDateMillis = it.date
         }
     }
 
@@ -218,6 +225,40 @@ fun AddTransactionScreen(
                 }
             }
 
+            // Date picker
+            FormCard("تاریخ تراکنش") {
+                OutlinedTextField(
+                    value = JalaliCalendar.toJalaliShort(selectedDateMillis),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("تاریخ") },
+                    leadingIcon = { Icon(Icons.Default.DateRange, null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            val cal = Calendar.getInstance().apply { timeInMillis = selectedDateMillis }
+                            DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+                                    val picked = Calendar.getInstance().apply {
+                                        set(year, month, day, 0, 0, 0)
+                                        set(Calendar.MILLISECOND, 0)
+                                    }
+                                    selectedDateMillis = picked.timeInMillis
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        }) {
+                            Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = fieldColors()
+                )
+            }
+
             // Description
             FormCard("توضیحات") {
                 OutlinedTextField(
@@ -255,7 +296,8 @@ fun AddTransactionScreen(
                                 id = if (isEdit) editId else 0,
                                 userId = userId, title = title, amount = amount,
                                 type = type, category = category,
-                                description = description, accountName = accountName
+                                description = description, accountName = accountName,
+                                date = selectedDateMillis
                             )
                             if (isEdit) viewModel.updateTransaction(tr) else viewModel.addTransaction(tr)
                             onBack()

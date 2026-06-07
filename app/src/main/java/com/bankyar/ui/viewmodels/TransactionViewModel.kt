@@ -79,5 +79,12 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun getById(id: Int) = repo.getById(id)
 
+    fun deleteAllTransactions() {
+        viewModelScope.launch {
+            repo.deleteAll(_userId.value)
+            _message.value = "همه تراکنش‌ها حذف شدند"
+        }
+    }
+
     fun clearMessage() { _message.value = null }
 }

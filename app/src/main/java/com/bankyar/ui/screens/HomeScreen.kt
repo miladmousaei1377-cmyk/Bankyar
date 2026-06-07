@@ -51,9 +51,31 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<Int>()) }
 
     LaunchedEffect(message) {
         message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
+    }
+
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            title = { Text("حذف همه تراکنش‌ها") },
+            text = { Text("آیا از حذف تمام تراکنش‌ها اطمینان دارید؟ این عملیات قابل بازگشت نیست.") },
+            confirmButton = {
+                TextButton({
+                    viewModel.deleteAllTransactions()
+                    showDeleteAllDialog = false
+                    selectionMode = false
+                    selectedIds = emptySet()
+                }) {
+                    Text("حذف همه", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ showDeleteAllDialog = false }) { Text("انصراف") } }
+        )
     }
 
     ModalNavigationDrawer(
@@ -173,12 +195,51 @@ fun HomeScreen(
                 }
 
                 item {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                         Text("تراکنش‌های اخیر", fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground)
-                        TextButton(onViewAll) {
-                            Text("مشاهده همه", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(bottom = 4.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onViewAll, modifier = Modifier.weight(1f)) {
+                                Text("مشاهده همه", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+                            }
+                            TextButton(
+                                onClick = {
+                                    selectionMode = !selectionMode
+                                    if (!selectionMode) selectedIds = emptySet()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    if (selectionMode) "لغو انتخاب" else "انتخاب تکی",
+                                    color = if (selectionMode) MaterialTheme.colorScheme.error
+                                            else MaterialTheme.colorScheme.secondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    if (selectionMode && selectedIds.isNotEmpty()) {
+                                        selectedIds.forEach { id ->
+                                            recent.find { it.id == id }?.let { viewModel.deleteTransaction(it) }
+                                        }
+                                        selectedIds = emptySet()
+                                        selectionMode = false
+                                    } else {
+                                        showDeleteAllDialog = true
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    if (selectionMode && selectedIds.isNotEmpty()) "حذف انتخاب‌ها" else "حذف همه",
+                                    color = MaterialTheme.colorScheme.error, fontSize = 12.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -193,7 +254,29 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    items(recent) { t -> TransactionItem(t, onClick = { onTransactionClick(t.id) }) }
+                    items(recent) { t ->
+                        if (selectionMode) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = selectedIds.contains(t.id),
+                                    onCheckedChange = { checked ->
+                                        selectedIds = if (checked) selectedIds + t.id else selectedIds - t.id
+                                    }
+                                )
+                                Box(Modifier.weight(1f)) {
+                                    TransactionItem(t, onClick = {
+                                        selectedIds = if (selectedIds.contains(t.id))
+                                            selectedIds - t.id else selectedIds + t.id
+                                    })
+                                }
+                            }
+                        } else {
+                            TransactionItem(t, onClick = { onTransactionClick(t.id) })
+                        }
+                    }
                 }
             }
         }

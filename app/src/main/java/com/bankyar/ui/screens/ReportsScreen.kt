@@ -1,7 +1,10 @@
 package com.bankyar.ui.screens
 
-import android.content.Context
-import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.pdf.PdfDocument
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -26,7 +29,6 @@ import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
-import java.io.OutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,13 +66,25 @@ fun ReportsScreen(
         }
     }
 
+    val pdfLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.openOutputStream(it)?.use { stream ->
+                val pdf = buildPdf(transactions, stats.totalBalance, stats.totalIncome, stats.totalExpense)
+                pdf.writeTo(stream)
+                pdf.close()
+            }
+        }
+    }
+
     if (showFormatDialog) {
         AlertDialog(
             onDismissRequest = { showFormatDialog = false },
             title = { Text("انتخاب فرمت خروجی", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    listOf("csv" to "CSV (اکسل)", "txt" to "TXT (متنی)").forEach { (fmt, label) ->
+                    listOf("csv" to "CSV (اکسل)", "txt" to "TXT (متنی)", "pdf" to "PDF").forEach { (fmt, label) ->
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()) {
                             RadioButton(selected = selectedFormat == fmt,
@@ -84,8 +98,11 @@ fun ReportsScreen(
                 Button(onClick = {
                     showFormatDialog = false
                     val fileName = "bankyar_report_${System.currentTimeMillis()}"
-                    if (selectedFormat == "csv") csvLauncher.launch("$fileName.csv")
-                    else txtLauncher.launch("$fileName.txt")
+                    when (selectedFormat) {
+                        "csv" -> csvLauncher.launch("$fileName.csv")
+                        "txt" -> txtLauncher.launch("$fileName.txt")
+                        "pdf" -> pdfLauncher.launch("$fileName.pdf")
+                    }
                 }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                     Text("دانلود", fontWeight = FontWeight.Bold)
                 }
@@ -93,6 +110,8 @@ fun ReportsScreen(
             dismissButton = { TextButton({ showFormatDialog = false }) { Text("انصراف") } }
         )
     }
+
+    val monthlyData = remember(transactions) { buildMonthlyData(transactions) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -140,8 +159,27 @@ fun ReportsScreen(
                 }
             }
 
+            // Monthly profit/loss section
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                Text("سود و زیان ماهانه", fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
+
+            if (monthlyData.isEmpty()) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                        Text("داده‌ای برای نمایش وجود ندارد", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else {
+                items(monthlyData) { month ->
+                    MonthlyProfitCard(month)
+                }
+            }
+
+            item {
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("همه تراکنش‌ها (${transactions.size})",
                         fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
@@ -164,6 +202,62 @@ fun ReportsScreen(
                 items(transactions, key = { it.id }) { t ->
                     TransactionItem(t, onClick = {})
                 }
+            }
+        }
+    }
+}
+
+data class MonthlyData(
+    val monthLabel: String,
+    val income: Double,
+    val expense: Double,
+    val profit: Double
+)
+
+private fun buildMonthlyData(transactions: List<Transaction>): List<MonthlyData> {
+    val grouped = transactions.groupBy { t ->
+        // Format: day/mm/yyyy → extract mm/yyyy as the group key
+        val jalali = JalaliCalendar.toJalaliShort(t.date)
+        jalali.substring(jalali.indexOf('/') + 1)
+    }
+    return grouped.entries
+        .sortedByDescending { it.key }
+        .map { (month, txList) ->
+            val income = txList.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+            val expense = txList.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            MonthlyData(month, income, expense, income - expense)
+        }
+}
+
+@Composable
+private fun MonthlyProfitCard(data: MonthlyData) {
+    val isProfit = data.profit >= 0
+    Card(
+        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(data.monthLabel, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("درآمد: ${formatAmount(data.income)} ت",
+                        color = Color(0xFF2E7D32), fontSize = 11.sp)
+                    Text("هزینه: ${formatAmount(data.expense)} ت",
+                        color = Color(0xFFC62828), fontSize = 11.sp)
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "${if (isProfit) "+" else ""}${formatAmount(data.profit)} ت",
+                    color = if (isProfit) Color(0xFF2E7D32) else Color(0xFFC62828),
+                    fontWeight = FontWeight.Bold, fontSize = 14.sp
+                )
+                Text(if (isProfit) "سود" else "زیان",
+                    color = if (isProfit) Color(0xFF2E7D32) else Color(0xFFC62828),
+                    fontSize = 11.sp)
             }
         }
     }
@@ -204,14 +298,90 @@ private fun buildTxt(list: List<Transaction>, balance: Double, income: Double, e
     sb.appendLine()
     sb.appendLine("───────────────────────────────────────────")
     list.forEach { t ->
-        val type = when (t.type) { TransactionType.INCOME -> "درآمد ↑"; TransactionType.EXPENSE -> "هزینه ↓"; TransactionType.TRANSFER -> "انتقال ↔" }
+        val type = when (t.type) { TransactionType.INCOME -> "درآمد"; TransactionType.EXPENSE -> "هزینه"; TransactionType.TRANSFER -> "انتقال" }
         val prefix = when (t.type) { TransactionType.INCOME -> "+"; TransactionType.EXPENSE -> "-"; else -> "" }
-        sb.appendLine("📅 ${JalaliCalendar.toJalaliString(t.date)}")
-        sb.appendLine("📌 ${t.title}  |  $type")
-        sb.appendLine("💰 $prefix${formatAmount(t.amount)} تومان")
-        sb.appendLine("📂 ${t.category.label}  |  🏦 ${t.accountName}")
-        if (t.description.isNotBlank()) sb.appendLine("📝 ${t.description}")
+        sb.appendLine("${JalaliCalendar.toJalaliString(t.date)}")
+        sb.appendLine("${t.title}  |  $type")
+        sb.appendLine("$prefix${formatAmount(t.amount)} تومان")
+        sb.appendLine("${t.category.label}  |  ${t.accountName}")
+        if (t.description.isNotBlank()) sb.appendLine("${t.description}")
         sb.appendLine("───────────────────────────────────────────")
     }
     return sb.toString()
+}
+
+private fun buildPdf(list: List<Transaction>, balance: Double, income: Double, expense: Double): PdfDocument {
+    val document = PdfDocument()
+    val pageWidth = 595
+    val pageHeight = 842
+    val margin = 40f
+    val lineHeight = 20f
+
+    val titlePaint = Paint().apply {
+        color = AndroidColor.rgb(26, 115, 232)
+        textSize = 18f
+        typeface = Typeface.DEFAULT_BOLD
+        isAntiAlias = true
+        textAlign = Paint.Align.CENTER
+    }
+    val headerPaint = Paint().apply {
+        color = AndroidColor.rgb(26, 115, 232)
+        textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD
+        isAntiAlias = true
+    }
+    val bodyPaint = Paint().apply {
+        color = AndroidColor.DKGRAY
+        textSize = 11f
+        isAntiAlias = true
+    }
+    val greenPaint = Paint().apply { color = AndroidColor.rgb(46, 125, 50); textSize = 11f; isAntiAlias = true }
+    val redPaint = Paint().apply { color = AndroidColor.rgb(198, 40, 40); textSize = 11f; isAntiAlias = true }
+    val dividerPaint = Paint().apply { color = AndroidColor.LTGRAY; strokeWidth = 1f }
+
+    var pageNum = 1
+    var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+    var page = document.startPage(pageInfo)
+    var canvas: Canvas = page.canvas
+    var y = margin + 20f
+
+    canvas.drawText("بانک‌یار - گزارش تراکنش‌ها", pageWidth / 2f, y, titlePaint)
+    y += lineHeight * 1.5f
+    canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint)
+    y += lineHeight
+
+    canvas.drawText("موجودی: ${formatAmount(balance)} تومان", margin, y, headerPaint)
+    y += lineHeight
+    canvas.drawText("درآمد کل: ${formatAmount(income)} تومان", margin, y, greenPaint)
+    y += lineHeight
+    canvas.drawText("هزینه کل: ${formatAmount(expense)} تومان", margin, y, redPaint)
+    y += lineHeight
+    canvas.drawText("تعداد تراکنش: ${list.size}", margin, y, bodyPaint)
+    y += lineHeight * 1.5f
+    canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint)
+    y += lineHeight
+
+    for (t in list) {
+        if (y > pageHeight - margin * 2) {
+            document.finishPage(page)
+            pageNum++
+            pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+            page = document.startPage(pageInfo)
+            canvas = page.canvas
+            y = margin + 20f
+        }
+        val type = when (t.type) { TransactionType.INCOME -> "درآمد"; TransactionType.EXPENSE -> "هزینه"; TransactionType.TRANSFER -> "انتقال" }
+        val prefix = when (t.type) { TransactionType.INCOME -> "+"; TransactionType.EXPENSE -> "-"; else -> "" }
+        val amountPaint = when (t.type) { TransactionType.INCOME -> greenPaint; TransactionType.EXPENSE -> redPaint; else -> bodyPaint }
+
+        canvas.drawText("${JalaliCalendar.toJalaliShort(t.date)}  |  ${t.title}  |  $type", margin, y, bodyPaint)
+        y += lineHeight
+        canvas.drawText("$prefix${formatAmount(t.amount)} تومان  |  ${t.category.label}  |  ${t.accountName}", margin, y, amountPaint)
+        y += lineHeight
+        canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint)
+        y += lineHeight * 0.5f
+    }
+
+    document.finishPage(page)
+    return document
 }

@@ -158,6 +158,9 @@ private fun AccountCard(acc: BankAccount, onEdit: () -> Unit, onDelete: () -> Un
                 if (acc.accountNumber.isNotBlank())
                     Text("شماره حساب: ${acc.accountNumber}",
                         color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                if (acc.initialBalance > 0.0)
+                    Text("موجودی اولیه: ${com.bankyar.ui.components.formatAmount(acc.initialBalance)} تومان",
+                        color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
             }
             IconButton(onEdit) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
             IconButton(onDelete) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
@@ -176,6 +179,7 @@ private fun AccountDialog(
     var bankName by remember { mutableStateOf(account?.bankName ?: "") }
     var cardNumber by remember { mutableStateOf(account?.cardNumber ?: "") }
     var accountNumber by remember { mutableStateOf(account?.accountNumber ?: "") }
+    var initialBalanceText by remember { mutableStateOf(if ((account?.initialBalance ?: 0.0) > 0.0) account!!.initialBalance.toLong().toString() else "") }
     var isDefault by remember { mutableStateOf(account?.isDefault ?: false) }
     var error by remember { mutableStateOf("") }
 
@@ -190,6 +194,9 @@ private fun AccountDialog(
                     Icons.Default.CreditCard, KeyboardType.Number)
                 AccountField("شماره حساب", accountNumber, { accountNumber = it },
                     Icons.Default.Numbers, KeyboardType.Number)
+                AccountField("موجودی اولیه (تومان)", initialBalanceText,
+                    { initialBalanceText = it.filter { c -> c.isDigit() } },
+                    Icons.Default.AccountBalanceWallet, KeyboardType.Number)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isDefault, onCheckedChange = { isDefault = it })
                     Text("حساب پیش‌فرض", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
@@ -208,7 +215,8 @@ private fun AccountDialog(
                     bankName = bankName,
                     cardNumber = cardNumber,
                     accountNumber = accountNumber,
-                    isDefault = isDefault
+                    isDefault = isDefault,
+                    initialBalance = initialBalanceText.toDoubleOrNull() ?: 0.0
                 ))
             }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                 Text("ذخیره", fontWeight = FontWeight.Bold)
