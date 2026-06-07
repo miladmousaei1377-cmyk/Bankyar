@@ -23,5 +23,14 @@ class ProfileViewModel(app: Application) : AndroidViewModel(app) {
         _message.value = "اطلاعات با موفقیت ذخیره شد"
     }
 
+    fun changePassword(user: User, currentPin: String, newPin: String, confirmPin: String) = viewModelScope.launch {
+        if (currentPin.isBlank() || newPin.isBlank()) { _message.value = "رمز عبور نمی‌تواند خالی باشد"; return@launch }
+        if (user.pin != currentPin) { _message.value = "رمز عبور فعلی اشتباه است"; return@launch }
+        if (newPin.length < 4) { _message.value = "رمز عبور جدید باید حداقل ۴ رقم باشد"; return@launch }
+        if (newPin != confirmPin) { _message.value = "تکرار رمز عبور مطابقت ندارد"; return@launch }
+        repo.update(user.copy(pin = newPin))
+        _message.value = "رمز عبور با موفقیت تغییر یافت"
+    }
+
     fun clearMessage() { _message.value = null }
 }

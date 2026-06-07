@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.data.database.entities.TransactionType
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
@@ -128,14 +129,12 @@ fun AddTransactionScreen(
                     label = { Text("مبلغ (تومان)") },
                     leadingIcon = { Icon(Icons.Default.AttachMoney, null, tint = typeFg) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = fieldColors(),
                     suffix = { Text("تومان", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 )
-                if (amountText.isNotBlank())
-                    Text("${formatAmount(amountText.toDoubleOrNull() ?: 0.0)} تومان",
-                        color = typeFg, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             }
 
             // Title

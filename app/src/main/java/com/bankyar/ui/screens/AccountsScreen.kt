@@ -19,6 +19,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.data.database.entities.BankAccount
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AccountsViewModel
 
@@ -196,7 +197,8 @@ private fun AccountDialog(
                     Icons.Default.Numbers, KeyboardType.Number)
                 AccountField("موجودی اولیه (تومان)", initialBalanceText,
                     { initialBalanceText = it.filter { c -> c.isDigit() } },
-                    Icons.Default.AccountBalanceWallet, KeyboardType.Number)
+                    Icons.Default.AccountBalanceWallet, KeyboardType.Number,
+                    ThousandSeparatorVisualTransformation())
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isDefault, onCheckedChange = { isDefault = it })
                     Text("حساب پیش‌فرض", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
@@ -230,12 +232,14 @@ private fun AccountDialog(
 private fun AccountField(
     label: String, value: String, onChange: (String) -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None
 ) {
     OutlinedTextField(
         value = value, onValueChange = onChange, label = { Text(label) },
         leadingIcon = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        visualTransformation = visualTransformation,
         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary,

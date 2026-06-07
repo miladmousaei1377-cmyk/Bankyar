@@ -1,5 +1,6 @@
 package com.bankyar.ui.screens
 
+import android.app.Activity
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,8 +43,9 @@ fun HomeScreen(
     onAccounts: () -> Unit,
     onReports: () -> Unit,
     onAbout: () -> Unit,
-    onLogout: () -> Unit
+    onSettings: () -> Unit
 ) {
+    val context = LocalContext.current
     LaunchedEffect(userId) { viewModel.setUser(userId) }
 
     val stats by viewModel.stats.collectAsState()
@@ -118,12 +121,16 @@ fun HomeScreen(
                 DrawerItem(Icons.Default.Info, "درباره ما") {
                     scope.launch { drawerState.close() }; onAbout()
                 }
+                DrawerItem(Icons.Default.Settings, "تنظیمات") {
+                    scope.launch { drawerState.close() }; onSettings()
+                }
 
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MaterialTheme.colorScheme.outline.copy(0.3f))
 
-                DrawerItem(Icons.Default.Logout, "خروج", tint = MaterialTheme.colorScheme.error) {
-                    scope.launch { drawerState.close() }; onLogout()
+                DrawerItem(Icons.Default.ExitToApp, "خروج از نرم‌افزار", tint = MaterialTheme.colorScheme.error) {
+                    scope.launch { drawerState.close() }
+                    (context as? Activity)?.finish()
                 }
             }
         }

@@ -1,7 +1,10 @@
 package com.bankyar.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,9 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.R
@@ -25,6 +29,7 @@ import com.bankyar.R
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -95,6 +100,25 @@ fun AboutScreen(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
                     AboutRow(Icons.Default.Code, "نسخه نرم‌افزار", "۱.۰.۰")
                     AboutRow(Icons.Default.Person, "توسعه‌دهنده", "میلاد موسایی")
+                    Row(
+                        Modifier.clickable {
+                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:miladmousaei1377@gmail.com"))
+                            context.startActivity(intent)
+                        },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Email, null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("ایمیل: ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                        Text(
+                            "miladmousaei1377@gmail.com",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 14.sp,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    }
                 }
             }
 

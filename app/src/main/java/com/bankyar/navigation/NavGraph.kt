@@ -26,6 +26,7 @@ sealed class Screen(val route: String) {
     object Accounts : Screen("accounts")
     object Reports : Screen("reports")
     object About : Screen("about")
+    object Settings : Screen("settings")
 }
 
 @Composable
@@ -54,6 +55,18 @@ fun BankYarNavGraph() {
 
     val startDest = if (loggedInUserId > 0) Screen.Home.route else Screen.Auth.route
 
+    // Auto-navigate to Auth when userId drops to -1 (e.g. after logout)
+    LaunchedEffect(loggedInUserId) {
+        if (loggedInUserId <= 0) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != null && currentRoute != Screen.Auth.route) {
+                navController.navigate(Screen.Auth.route) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        }
+    }
+
     NavHost(navController = navController, startDestination = startDest) {
 
         composable(Screen.Auth.route) {
@@ -79,12 +92,7 @@ fun BankYarNavGraph() {
                     onAccounts = { navController.navigate(Screen.Accounts.route) },
                     onReports = { navController.navigate(Screen.Reports.route) },
                     onAbout = { navController.navigate(Screen.About.route) },
-                    onLogout = {
-                        authViewModel.logout()
-                        navController.navigate(Screen.Auth.route) {
-                            popUpTo(Screen.Home.route) { inclusive = true }
-                        }
-                    }
+                    onSettings = { navController.navigate(Screen.Settings.route) }
                 )
             }
         }
@@ -155,6 +163,13 @@ fun BankYarNavGraph() {
 
         composable(Screen.About.route) {
             AboutScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                userId = loggedInUserId,
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }
