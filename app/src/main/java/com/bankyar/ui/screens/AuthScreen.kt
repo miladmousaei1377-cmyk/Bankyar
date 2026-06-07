@@ -25,6 +25,7 @@ import com.bankyar.R
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AuthViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -50,7 +51,12 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
     var forgotLoading by remember { mutableStateOf(false) }
     var resetSuccessMsg by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(state.success) { if (state.success) onAuthenticated() }
+    LaunchedEffect(state.success) {
+        if (state.success) {
+            delay(800)
+            onAuthenticated()
+        }
+    }
 
     Box(
         Modifier.fillMaxSize()
@@ -65,7 +71,11 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
             Image(
                 painter = painterResource(R.drawable.app_logo),
                 contentDescription = "لوگوی بانک‌یار",
-                modifier = Modifier.size(100.dp).clip(RoundedCornerShape(24.dp)),
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White)
+                    .padding(8.dp),
                 contentScale = ContentScale.Fit
             )
 
@@ -172,6 +182,22 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                     Icon(Icons.Default.Error, null, tint = Color(0xFFC62828), modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(err, color = Color(0xFFC62828), fontSize = 13.sp)
+                                }
+                            }
+
+                            if (state.success) {
+                                Spacer(Modifier.height(12.dp))
+                                Row(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFE8F5E9)).padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        if (isLogin) "ورود با موفقیت انجام شد" else "ثبت‌نام با موفقیت انجام شد",
+                                        color = Color(0xFF2E7D32), fontSize = 13.sp, fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
 
