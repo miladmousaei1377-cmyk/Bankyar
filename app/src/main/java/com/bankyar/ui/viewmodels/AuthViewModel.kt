@@ -87,7 +87,6 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun logout() {
-        _isSessionActive.value = false
         viewModelScope.launch { prefs.clearUserId() }
     }
 
