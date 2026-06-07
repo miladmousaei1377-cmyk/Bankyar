@@ -144,6 +144,8 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                     focusedTextColor = Color(0xFF1A1A2E),
                                     unfocusedTextColor = Color(0xFF1A1A2E),
                                     cursorColor = Primary,
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
                                 )
                             )
 
@@ -328,6 +330,8 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                     focusedTextColor = Color(0xFF1A1A2E),
                                     unfocusedTextColor = Color(0xFF1A1A2E),
                                     cursorColor = Primary,
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
                                 )
                             )
 
@@ -354,6 +358,8 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                     focusedTextColor = Color(0xFF1A1A2E),
                                     unfocusedTextColor = Color(0xFF1A1A2E),
                                     cursorColor = Primary,
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
                                 )
                             )
 
@@ -445,6 +451,8 @@ private fun AuthTextField(
             focusedTextColor = Color(0xFF1A1A2E),
             unfocusedTextColor = Color(0xFF1A1A2E),
             cursorColor = Primary,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
         )
     )
 }
