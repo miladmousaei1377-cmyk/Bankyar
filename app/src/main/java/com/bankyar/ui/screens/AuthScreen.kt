@@ -3,6 +3,7 @@ package com.bankyar.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -21,10 +22,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import com.bankyar.R
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AuthViewModel
+import com.bankyar.util.BiometricHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -32,6 +35,7 @@ import kotlinx.coroutines.launch
 fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val activity = context as? FragmentActivity
     val scope = rememberCoroutineScope()
 
     var isLogin by remember { mutableStateOf(true) }
@@ -51,6 +55,15 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
     var forgotLoading by remember { mutableStateOf(false) }
     var resetSuccessMsg by remember { mutableStateOf<String?>(null) }
 
+    // Fingerprint
+    var hasAnyUser by remember { mutableStateOf<Boolean?>(null) }
+    var fingerprintMsg by remember { mutableStateOf<String?>(null) }
+    val biometricAvailable = remember { BiometricHelper.canAuthenticate(context) }
+
+    LaunchedEffect(Unit) {
+        hasAnyUser = AppDatabase.getInstance(context).userDao().getFirstUser() != null
+    }
+
     LaunchedEffect(state.success) {
         if (state.success) {
             delay(800)
@@ -66,24 +79,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(28.dp))
-
-            Image(
-                painter = painterResource(R.drawable.app_logo),
-                contentDescription = "لوگوی بانک‌یار",
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White)
-                    .padding(6.dp),
-                contentScale = ContentScale.Fit
-            )
-
-            Spacer(Modifier.height(10.dp))
-            Text("بانک‌یار", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text("مدیریت هوشمند حساب‌های بانکی", fontSize = 12.sp, color = Color.White.copy(0.8f))
-
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(36.dp))
 
             when (forgotStep) {
                 0 -> {
@@ -92,7 +88,29 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(8.dp)
                     ) {
-                        Column(Modifier.padding(18.dp)) {
+                        Column(
+                            Modifier.padding(horizontal = 18.dp).padding(top = 24.dp, bottom = 18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Logo + title inside card
+                            Image(
+                                painter = painterResource(R.drawable.app_logo),
+                                contentDescription = "لوگوی بانک‌یار",
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Primary.copy(alpha = 0.08f))
+                                    .padding(8.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text("بانک‌یار", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A2E))
+                            Text("مدیریت هوشمند حساب‌های بانکی", fontSize = 11.sp, color = Color(0xFF6B7280))
+
+                            Spacer(Modifier.height(18.dp))
+                            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFEEF2FB)))
+                            Spacer(Modifier.height(16.dp))
+
                             // Tabs
                             Row(
                                 Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
@@ -243,6 +261,55 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                         }
                     }
 
+                    // Fingerprint button below card
+                    Spacer(Modifier.height(32.dp))
+                    val isActive = hasAnyUser == true && biometricAvailable
+                    Box(
+                        Modifier
+                            .size(68.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isActive) Color.White.copy(alpha = 0.2f)
+                                else Color.White.copy(alpha = 0.08f)
+                            )
+                            .clickable(enabled = hasAnyUser != null) {
+                                fingerprintMsg = null
+                                when {
+                                    hasAnyUser == false ->
+                                        fingerprintMsg = "اثر انگشت فعال نیست، ابتدا ثبت‌نام کنید"
+                                    !biometricAvailable ->
+                                        fingerprintMsg = "دستگاه از اثر انگشت پشتیبانی نمی‌کند"
+                                    activity != null -> BiometricHelper.showPrompt(
+                                        activity = activity,
+                                        onSuccess = {
+                                            scope.launch {
+                                                val user = AppDatabase.getInstance(context).userDao().getFirstUser()
+                                                if (user != null) viewModel.loginWithBiometric(user.id)
+                                                else fingerprintMsg = "اثر انگشت فعال نیست، ابتدا ثبت‌نام کنید"
+                                            }
+                                        },
+                                        onError = { fingerprintMsg = "شناسایی نشد" },
+                                        onFailed = { fingerprintMsg = "شناسایی نشد" }
+                                    )
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Fingerprint, null,
+                            tint = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        fingerprintMsg
+                            ?: if (hasAnyUser == false || !biometricAvailable) "اثر انگشت فعال نیست"
+                            else "ورود با اثر انگشت",
+                        color = if (fingerprintMsg != null) Color(0xFFFFCDD2)
+                                else Color.White.copy(alpha = if (isActive) 0.85f else 0.45f),
+                        fontSize = 12.sp
+                    )
                 }
 
                 1 -> {
@@ -415,7 +482,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

@@ -86,6 +86,14 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         _isSessionActive.value = true
     }
 
+    fun loginWithBiometric(userId: Int) {
+        viewModelScope.launch {
+            prefs.saveUserId(userId)
+            _isSessionActive.value = true
+            _state.value = AuthState(success = true)
+        }
+    }
+
     fun logout() {
         viewModelScope.launch { prefs.clearUserId() }
     }

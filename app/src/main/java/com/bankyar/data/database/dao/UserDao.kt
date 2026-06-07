@@ -21,6 +21,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
     suspend fun findById(id: Int): User?
 
+    @Query("SELECT * FROM users LIMIT 1")
+    suspend fun getFirstUser(): User?
+
     @Update
     suspend fun update(user: User)
 }
