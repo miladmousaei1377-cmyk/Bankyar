@@ -67,14 +67,18 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             _state.value = AuthState(isLoading = true)
-            val user = repo.login(phone, pin)
-            if (user == null) {
-                _state.value = AuthState(error = "شماره یا رمز عبور اشتباه است")
-            } else {
-                prefs.saveUserId(user.id)
-                _isSessionActive.value = true
-                _state.value = AuthState(success = true)
+            val userByPhone = repo.findByPhone(phone)
+            if (userByPhone == null) {
+                _state.value = AuthState(error = "این شماره موبایل ثبت نشده است، ابتدا ثبت‌نام کنید")
+                return@launch
             }
+            if (userByPhone.pin != pin) {
+                _state.value = AuthState(error = "رمز عبور اشتباه است")
+                return@launch
+            }
+            prefs.saveUserId(userByPhone.id)
+            _isSessionActive.value = true
+            _state.value = AuthState(success = true)
         }
     }
 

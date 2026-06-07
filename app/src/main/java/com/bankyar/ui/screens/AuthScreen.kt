@@ -21,17 +21,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import com.bankyar.R
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AuthViewModel
+import com.bankyar.util.BiometricHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
     val state by viewModel.state.collectAsState()
+    val loggedInUserId by viewModel.loggedInUserId.collectAsState()
+    val biometricEnabled by viewModel.biometricEnabled.collectAsState()
     val context = LocalContext.current
+    val activity = context as? FragmentActivity
     val scope = rememberCoroutineScope()
 
     var isLogin by remember { mutableStateOf(true) }
@@ -50,6 +55,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
     var forgotError by remember { mutableStateOf<String?>(null) }
     var forgotLoading by remember { mutableStateOf(false) }
     var resetSuccessMsg by remember { mutableStateOf<String?>(null) }
+    var bioMsg by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.success) {
         if (state.success) {
@@ -58,63 +64,85 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
         }
     }
 
+    fun triggerBiometric() {
+        bioMsg = null
+        when {
+            loggedInUserId <= 0 && !biometricEnabled ->
+                bioMsg = "ابتدا ثبت‌نام کنید"
+            loggedInUserId <= 0 ->
+                bioMsg = "ابتدا ثبت‌نام کنید"
+            !biometricEnabled ->
+                bioMsg = "اثر انگشت در تنظیمات فعال نشده است"
+            activity != null && BiometricHelper.canAuthenticate(context) ->
+                BiometricHelper.showPrompt(
+                    activity = activity,
+                    onSuccess = { viewModel.activateSession(); onAuthenticated() },
+                    onError = { msg -> bioMsg = msg }
+                )
+            else ->
+                bioMsg = "اثر انگشت در دستگاه پشتیبانی نمی‌شود"
+        }
+    }
+
     Box(
         Modifier.fillMaxSize()
             .background(Brush.verticalGradient(listOf(GradientStart, GradientEnd, Color(0xFF0A2472))))
     ) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(28.dp))
 
             Image(
                 painter = painterResource(R.drawable.app_logo),
                 contentDescription = "لوگوی بانک‌یار",
                 modifier = Modifier
-                    .size(100.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(Color.White)
-                    .padding(8.dp),
+                    .padding(6.dp),
                 contentScale = ContentScale.Fit
             )
 
-            Spacer(Modifier.height(16.dp))
-            Text("بانک‌یار", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text("مدیریت هوشمند حساب‌های بانکی", fontSize = 14.sp, color = Color.White.copy(0.8f))
+            Spacer(Modifier.height(10.dp))
+            Text("بانک‌یار", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("مدیریت هوشمند حساب‌های بانکی", fontSize = 12.sp, color = Color.White.copy(0.8f))
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(20.dp))
 
             when (forgotStep) {
                 0 -> {
-                    // Normal login / register card
                     Card(
-                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
+                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(8.dp)
                     ) {
-                        Column(Modifier.padding(24.dp)) {
+                        Column(Modifier.padding(18.dp)) {
                             // Tabs
                             Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                                     .background(Color(0xFFEEF2FB))
                             ) {
                                 listOf("ورود" to true, "ثبت‌نام" to false).forEach { (label, isLoginTab) ->
                                     Box(
-                                        Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                                        Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                                             .background(if (isLogin == isLoginTab) Primary else Color.Transparent)
-                                            .clickable { isLogin = isLoginTab; viewModel.clearError() }
-                                            .padding(vertical = 12.dp),
+                                            .clickable { isLogin = isLoginTab; viewModel.clearError(); bioMsg = null }
+                                            .padding(vertical = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(label,
+                                        Text(
+                                            label,
                                             color = if (isLogin == isLoginTab) Color.White else Color(0xFF6B7280),
-                                            fontWeight = FontWeight.SemiBold)
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp
+                                        )
                                     }
                                 }
                             }
 
-                            Spacer(Modifier.height(24.dp))
+                            Spacer(Modifier.height(16.dp))
 
                             AnimatedVisibility(!isLogin, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                                 Column {
@@ -122,7 +150,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                         label = "نام و نام خانوادگی", value = name,
                                         onValueChange = { name = it }, icon = Icons.Default.Person
                                     )
-                                    Spacer(Modifier.height(12.dp))
+                                    Spacer(Modifier.height(8.dp))
                                 }
                             }
 
@@ -131,7 +159,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                 onValueChange = { phone = it }, icon = Icons.Default.Phone,
                                 keyboardType = KeyboardType.Phone
                             )
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             OutlinedTextField(
                                 value = pin,
@@ -140,8 +168,10 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                 leadingIcon = { Icon(Icons.Default.Lock, null, tint = Primary) },
                                 trailingIcon = {
                                     IconButton({ pinVisible = !pinVisible }) {
-                                        Icon(if (pinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            null, tint = Color(0xFF6B7280))
+                                        Icon(
+                                            if (pinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            null, tint = Color(0xFF6B7280)
+                                        )
                                     }
                                 },
                                 visualTransformation = if (pinVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -163,100 +193,120 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                 Spacer(Modifier.height(8.dp))
                                 Row(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFE8F5E9)).padding(10.dp),
+                                        .background(Color(0xFFE8F5E9)).padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(msg, color = Color(0xFF2E7D32), fontSize = 13.sp)
+                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(msg, color = Color(0xFF2E7D32), fontSize = 12.sp)
                                 }
                             }
 
                             state.error?.let { err ->
-                                Spacer(Modifier.height(12.dp))
+                                Spacer(Modifier.height(8.dp))
                                 Row(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFFFEBEE)).padding(10.dp),
+                                        .background(Color(0xFFFFEBEE)).padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.Error, null, tint = Color(0xFFC62828), modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(err, color = Color(0xFFC62828), fontSize = 13.sp)
+                                    Icon(Icons.Default.Error, null, tint = Color(0xFFC62828), modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(err, color = Color(0xFFC62828), fontSize = 12.sp)
                                 }
                             }
 
                             if (state.success) {
-                                Spacer(Modifier.height(12.dp))
+                                Spacer(Modifier.height(8.dp))
                                 Row(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFE8F5E9)).padding(10.dp),
+                                        .background(Color(0xFFE8F5E9)).padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
+                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
                                     Text(
                                         if (isLogin) "ورود با موفقیت انجام شد" else "ثبت‌نام با موفقیت انجام شد",
-                                        color = Color(0xFF2E7D32), fontSize = 13.sp, fontWeight = FontWeight.Medium
+                                        color = Color(0xFF2E7D32), fontSize = 12.sp, fontWeight = FontWeight.Medium
                                     )
                                 }
                             }
 
-                            Spacer(Modifier.height(20.dp))
+                            Spacer(Modifier.height(14.dp))
 
                             Button(
                                 onClick = {
                                     resetSuccessMsg = null
+                                    bioMsg = null
                                     if (isLogin) viewModel.login(phone, pin)
                                     else viewModel.register(name, phone, pin)
                                 },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                                 enabled = !state.isLoading
                             ) {
                                 if (state.isLoading)
-                                    CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+                                    CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                                 else
-                                    Text(if (isLogin) "ورود به حساب" else "ایجاد حساب",
-                                        fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                                    Text(
+                                        if (isLogin) "ورود به حساب" else "ایجاد حساب",
+                                        fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White
+                                    )
                             }
 
                             if (isLogin) {
-                                Spacer(Modifier.height(8.dp))
+                                Spacer(Modifier.height(4.dp))
                                 TextButton(
                                     onClick = {
-                                        forgotStep = 1
-                                        forgotError = null
-                                        forgotPhone = ""
-                                        forgotNewPin = ""
-                                        forgotConfirmPin = ""
-                                        resetSuccessMsg = null
-                                        viewModel.clearError()
+                                        forgotStep = 1; forgotError = null
+                                        forgotPhone = ""; forgotNewPin = ""; forgotConfirmPin = ""
+                                        resetSuccessMsg = null; viewModel.clearError()
                                     },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("فراموشی رمز عبور؟",
-                                        color = Primary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                    Text("فراموشی رمز عبور؟", color = Primary, fontSize = 13.sp)
                                 }
                             }
+                        }
+                    }
+
+                    // Fingerprint section below card
+                    Spacer(Modifier.height(20.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            Modifier
+                                .size(60.dp)
+                                .clip(RoundedCornerShape(30.dp))
+                                .background(Color.White.copy(alpha = 0.18f))
+                                .clickable { triggerBiometric() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Fingerprint, null,
+                                tint = if (biometricEnabled && loggedInUserId > 0) Color.White else Color.White.copy(0.5f),
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text("ورود با اثر انگشت", color = Color.White.copy(0.8f), fontSize = 12.sp)
+                        bioMsg?.let { msg ->
+                            Spacer(Modifier.height(6.dp))
+                            Text(msg, color = Color(0xFFFFCDD2), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
                 1 -> {
-                    // Forgot: step 1 — verify phone
                     Card(
-                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
+                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(8.dp)
                     ) {
-                        Column(Modifier.padding(24.dp)) {
-                            Text("بازیابی رمز عبور",
-                                fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1A1A2E))
-                            Spacer(Modifier.height(6.dp))
-                            Text("شماره موبایل ثبت‌شده را وارد کنید",
-                                color = Color(0xFF6B7280), fontSize = 13.sp)
-                            Spacer(Modifier.height(20.dp))
+                        Column(Modifier.padding(18.dp)) {
+                            Text("بازیابی رمز عبور", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF1A1A2E))
+                            Spacer(Modifier.height(4.dp))
+                            Text("شماره موبایل ثبت‌شده را وارد کنید", color = Color(0xFF6B7280), fontSize = 12.sp)
+                            Spacer(Modifier.height(16.dp))
 
                             AuthTextField(
                                 label = "شماره موبایل", value = forgotPhone,
@@ -265,75 +315,61 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                             )
 
                             forgotError?.let { err ->
-                                Spacer(Modifier.height(10.dp))
+                                Spacer(Modifier.height(8.dp))
                                 Row(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFFFEBEE)).padding(10.dp),
+                                        .background(Color(0xFFFFEBEE)).padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.Error, null, tint = Color(0xFFC62828), modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(err, color = Color(0xFFC62828), fontSize = 13.sp)
+                                    Icon(Icons.Default.Error, null, tint = Color(0xFFC62828), modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(err, color = Color(0xFFC62828), fontSize = 12.sp)
                                 }
                             }
 
-                            Spacer(Modifier.height(20.dp))
+                            Spacer(Modifier.height(14.dp))
 
                             Button(
                                 onClick = {
-                                    if (forgotPhone.length < 10) {
-                                        forgotError = "شماره موبایل معتبر نیست"
-                                        return@Button
-                                    }
-                                    forgotLoading = true
-                                    forgotError = null
+                                    if (forgotPhone.length < 10) { forgotError = "شماره موبایل معتبر نیست"; return@Button }
+                                    forgotLoading = true; forgotError = null
                                     scope.launch {
                                         val user = AppDatabase.getInstance(context).userDao().findByPhone(forgotPhone)
                                         forgotLoading = false
-                                        if (user == null) {
-                                            forgotError = "این شماره موبایل ثبت نشده است"
-                                        } else {
-                                            forgotStep = 2
-                                        }
+                                        if (user == null) forgotError = "این شماره موبایل ثبت نشده است"
+                                        else forgotStep = 2
                                     }
                                 },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                                 enabled = !forgotLoading
                             ) {
                                 if (forgotLoading)
-                                    CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+                                    CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                                 else
-                                    Text("تأیید شماره موبایل",
-                                        fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                                    Text("تأیید شماره موبایل", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
                             }
 
-                            Spacer(Modifier.height(8.dp))
-                            TextButton(
-                                onClick = { forgotStep = 0; forgotError = null },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("بازگشت به صفحه ورود", color = Primary, fontSize = 14.sp)
+                            Spacer(Modifier.height(4.dp))
+                            TextButton(onClick = { forgotStep = 0; forgotError = null }, modifier = Modifier.fillMaxWidth()) {
+                                Text("بازگشت به صفحه ورود", color = Primary, fontSize = 13.sp)
                             }
                         }
                     }
                 }
 
                 2 -> {
-                    // Forgot: step 2 — set new pin
                     Card(
-                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
+                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(8.dp)
                     ) {
-                        Column(Modifier.padding(24.dp)) {
-                            Text("رمز عبور جدید",
-                                fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1A1A2E))
-                            Spacer(Modifier.height(6.dp))
-                            Text("رمز عبور جدید خود را وارد کنید",
-                                color = Color(0xFF6B7280), fontSize = 13.sp)
-                            Spacer(Modifier.height(20.dp))
+                        Column(Modifier.padding(18.dp)) {
+                            Text("رمز عبور جدید", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF1A1A2E))
+                            Spacer(Modifier.height(4.dp))
+                            Text("رمز عبور جدید خود را وارد کنید", color = Color(0xFF6B7280), fontSize = 12.sp)
+                            Spacer(Modifier.height(16.dp))
 
                             OutlinedTextField(
                                 value = forgotNewPin,
@@ -342,8 +378,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                 leadingIcon = { Icon(Icons.Default.Lock, null, tint = Primary) },
                                 trailingIcon = {
                                     IconButton({ forgotNewPinVisible = !forgotNewPinVisible }) {
-                                        Icon(if (forgotNewPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            null, tint = Color(0xFF6B7280))
+                                        Icon(if (forgotNewPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null, tint = Color(0xFF6B7280))
                                     }
                                 },
                                 visualTransformation = if (forgotNewPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -351,17 +386,13 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Primary,
-                                    unfocusedBorderColor = Color(0xFF9CA3AF),
-                                    focusedTextColor = Color(0xFF1A1A2E),
-                                    unfocusedTextColor = Color(0xFF1A1A2E),
-                                    cursorColor = Primary,
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedBorderColor = Primary, unfocusedBorderColor = Color(0xFF9CA3AF),
+                                    focusedTextColor = Color(0xFF1A1A2E), unfocusedTextColor = Color(0xFF1A1A2E),
+                                    cursorColor = Primary, focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
                                 )
                             )
 
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             OutlinedTextField(
                                 value = forgotConfirmPin,
@@ -370,8 +401,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                 leadingIcon = { Icon(Icons.Default.Lock, null, tint = Primary) },
                                 trailingIcon = {
                                     IconButton({ forgotConfirmPinVisible = !forgotConfirmPinVisible }) {
-                                        Icon(if (forgotConfirmPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            null, tint = Color(0xFF6B7280))
+                                        Icon(if (forgotConfirmPinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null, tint = Color(0xFF6B7280))
                                     }
                                 },
                                 visualTransformation = if (forgotConfirmPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -379,81 +409,64 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Primary,
-                                    unfocusedBorderColor = Color(0xFF9CA3AF),
-                                    focusedTextColor = Color(0xFF1A1A2E),
-                                    unfocusedTextColor = Color(0xFF1A1A2E),
-                                    cursorColor = Primary,
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedBorderColor = Primary, unfocusedBorderColor = Color(0xFF9CA3AF),
+                                    focusedTextColor = Color(0xFF1A1A2E), unfocusedTextColor = Color(0xFF1A1A2E),
+                                    cursorColor = Primary, focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
                                 )
                             )
 
                             forgotError?.let { err ->
-                                Spacer(Modifier.height(10.dp))
+                                Spacer(Modifier.height(8.dp))
                                 Row(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFFFEBEE)).padding(10.dp),
+                                        .background(Color(0xFFFFEBEE)).padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.Error, null, tint = Color(0xFFC62828), modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(err, color = Color(0xFFC62828), fontSize = 13.sp)
+                                    Icon(Icons.Default.Error, null, tint = Color(0xFFC62828), modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(err, color = Color(0xFFC62828), fontSize = 12.sp)
                                 }
                             }
 
-                            Spacer(Modifier.height(20.dp))
+                            Spacer(Modifier.height(14.dp))
 
                             Button(
                                 onClick = {
-                                    if (forgotNewPin.length < 4) {
-                                        forgotError = "رمز عبور باید حداقل ۴ رقم باشد"
-                                        return@Button
-                                    }
-                                    if (forgotNewPin != forgotConfirmPin) {
-                                        forgotError = "تکرار رمز عبور مطابقت ندارد"
-                                        return@Button
-                                    }
+                                    if (forgotNewPin.length < 4) { forgotError = "رمز عبور باید حداقل ۴ رقم باشد"; return@Button }
+                                    if (forgotNewPin != forgotConfirmPin) { forgotError = "تکرار رمز عبور مطابقت ندارد"; return@Button }
                                     forgotLoading = true
                                     scope.launch {
                                         val db = AppDatabase.getInstance(context)
                                         val user = db.userDao().findByPhone(forgotPhone)
-                                        if (user != null) {
-                                            db.userDao().update(user.copy(pin = forgotNewPin))
-                                        }
+                                        if (user != null) db.userDao().update(user.copy(pin = forgotNewPin))
                                         forgotLoading = false
                                         forgotStep = 0
                                         forgotPhone = ""; forgotNewPin = ""; forgotConfirmPin = ""
-                                        forgotError = null
-                                        isLogin = true
+                                        forgotError = null; isLogin = true
                                         resetSuccessMsg = "رمز عبور با موفقیت تغییر یافت. وارد شوید"
                                     }
                                 },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                                 enabled = !forgotLoading
                             ) {
                                 if (forgotLoading)
-                                    CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+                                    CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                                 else
-                                    Text("ذخیره رمز عبور جدید",
-                                        fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                                    Text("ذخیره رمز عبور جدید", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
                             }
 
-                            Spacer(Modifier.height(8.dp))
-                            TextButton(
-                                onClick = { forgotStep = 1; forgotError = null },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("بازگشت", color = Primary, fontSize = 14.sp)
+                            Spacer(Modifier.height(4.dp))
+                            TextButton(onClick = { forgotStep = 1; forgotError = null }, modifier = Modifier.fillMaxWidth()) {
+                                Text("بازگشت", color = Primary, fontSize = 13.sp)
                             }
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
