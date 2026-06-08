@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -58,48 +59,63 @@ fun AboutScreen(onBack: () -> Unit) {
             Image(
                 painter = painterResource(R.drawable.app_logo),
                 contentDescription = "لوگوی بانک‌یار",
-                modifier = Modifier.size(120.dp).clip(RoundedCornerShape(24.dp)),
+                modifier = Modifier.size(110.dp).clip(RoundedCornerShape(24.dp)),
                 contentScale = ContentScale.Fit
             )
 
-            Text("بانک‌یار", fontSize = 28.sp, fontWeight = FontWeight.Bold,
+            Text("بانک‌یار", fontSize = 26.sp, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground)
-            Text("نسخه ۱.۰.۰", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+            Text("نسخه ۱.۰.۰", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
 
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("درباره نرم‌افزار", fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
-                    Text(
-                        "بانک‌یار یک نرم‌افزار مدیریت مالی شخصی است که به شما کمک می‌کند تراکنش‌های بانکی خود را به صورت کامل و دقیق ثبت و مدیریت کنید.\n\n" +
-                        "با بانک‌یار می‌توانید:\n" +
-                        "• تراکنش‌های درآمد، هزینه و انتقال را ثبت کنید\n" +
-                        "• حساب‌های بانکی مختلف را مدیریت کنید\n" +
-                        "• گزارش‌های مالی را دریافت کنید\n" +
-                        "• موجودی کل خود را در یک نگاه مشاهده کنید",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 22.sp,
-                        fontSize = 14.sp
-                    )
+            // Description card
+            AboutCard(title = "درباره نرم‌افزار") {
+                Text(
+                    "بانک‌یار یک دستیار مالی شخصی است که تمام داده‌های شما را به‌صورت کاملاً آفلاین و امن روی دستگاه شما ذخیره می‌کند. " +
+                    "بدون نیاز به اینترنت، بدون ارسال اطلاعات به سرور — حریم خصوصی شما ۱۰۰٪ حفظ می‌شود.\n\n" +
+                    "این نرم‌افزار برای افرادی طراحی شده که می‌خواهند درآمد، هزینه و تراکنش‌های بانکی خود را به‌سادگی پیگیری کنند " +
+                    "و در هر لحظه تصویر روشنی از وضعیت مالی خود داشته باشند.",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 24.sp,
+                    fontSize = 14.sp
+                )
+            }
+
+            // Features card
+            AboutCard(title = "امکانات نرم‌افزار") {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    FeatureRow(Icons.Default.AddCard,
+                        "ثبت تراکنش",
+                        "ثبت درآمد، هزینه و انتقال با دسته‌بندی‌های متنوع")
+                    FeatureRow(Icons.Default.AccountBalance,
+                        "مدیریت حساب‌های بانکی",
+                        "افزودن حساب‌های مختلف با نام بانک، شماره کارت و موجودی اولیه")
+                    FeatureRow(Icons.Default.BarChart,
+                        "گزارش مالی",
+                        "نمودار درآمد و هزینه به تفکیک ماه و دسته‌بندی")
+                    FeatureRow(Icons.Default.Backup,
+                        "پشتیبان‌گیری",
+                        "بکاپ دستی به فایل JSON و بکاپ خودکار هر ۳۰ دقیقه در حافظه اصلی")
+                    FeatureRow(Icons.Default.Fingerprint,
+                        "ورود با اثر انگشت",
+                        "احراز هویت سریع با بیومتریک برای امنیت بیشتر")
+                    FeatureRow(Icons.Default.CalendarMonth,
+                        "تقویم شمسی",
+                        "نمایش کامل تاریخ‌ها بر اساس تقویم جلالی")
+                    FeatureRow(Icons.Default.DarkMode,
+                        "حالت تاریک",
+                        "پشتیبانی کامل از تم تاریک و روشن")
+                    FeatureRow(Icons.Default.Lock,
+                        "قفل نشست",
+                        "هر بار که برنامه بسته شود، هنگام بازگشایی هویت‌سنجی انجام می‌شود")
                 }
             }
 
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("اطلاعات فنی", fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
+            // Tech info card
+            AboutCard(title = "اطلاعات فنی") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     AboutRow(Icons.Default.Code, "نسخه نرم‌افزار", "۱.۰.۰")
                     AboutRow(Icons.Default.Person, "توسعه‌دهنده", "میلاد موسایی")
+                    AboutRow(Icons.Default.Storage, "پایگاه داده", "محلی — بدون سرور")
                     Row(
                         Modifier.clickable {
                             val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:miladmousaei1377@gmail.com"))
@@ -128,10 +144,45 @@ fun AboutScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun AboutRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String, value: String
-) {
+private fun AboutCard(title: String, content: @Composable () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(title, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun FeatureRow(icon: ImageVector, title: String, description: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+            Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp, lineHeight = 18.sp)
+        }
+    }
+}
+
+@Composable
+private fun AboutRow(icon: ImageVector, label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
