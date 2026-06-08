@@ -79,7 +79,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(64.dp))
+            Spacer(Modifier.height(80.dp))
 
             when (forgotStep) {
                 0 -> {
@@ -266,13 +266,10 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                     val isActive = hasAnyUser == true && biometricAvailable
                     Box(
                         Modifier
-                            .size(68.dp)
+                            .size(72.dp)
                             .clip(CircleShape)
-                            .background(
-                                if (isActive) Color.White.copy(alpha = 0.2f)
-                                else Color.White.copy(alpha = 0.08f)
-                            )
-                            .clickable(enabled = hasAnyUser != null) {
+                            .background(Color.White.copy(alpha = if (isActive) 0.22f else 0.14f))
+                            .clickable {
                                 fingerprintMsg = null
                                 when {
                                     hasAnyUser == false ->
@@ -297,8 +294,8 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                     ) {
                         Icon(
                             Icons.Default.Fingerprint, null,
-                            tint = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
-                            modifier = Modifier.size(38.dp)
+                            tint = if (isActive) Color.White else Color.White.copy(alpha = 0.55f),
+                            modifier = Modifier.size(40.dp)
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -307,7 +304,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
                             ?: if (hasAnyUser == false || !biometricAvailable) "اثر انگشت فعال نیست"
                             else "ورود با اثر انگشت",
                         color = if (fingerprintMsg != null) Color(0xFFFFCDD2)
-                                else Color.White.copy(alpha = if (isActive) 0.85f else 0.45f),
+                                else Color.White.copy(alpha = if (isActive) 0.85f else 0.65f),
                         fontSize = 12.sp
                     )
                 }
