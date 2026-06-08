@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.R
+import com.bankyar.data.PreferencesManager
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.ui.components.formatAmount
@@ -58,6 +59,44 @@ fun HomeScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showDeleteAllDialog by remember { mutableStateOf(false) }
+
+    // Welcome dialog on first launch
+    val prefs = remember { PreferencesManager(context) }
+    val hasSeenWelcome by prefs.hasSeenWelcome.collectAsState(initial = true)
+    var showWelcomeDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(hasSeenWelcome) {
+        if (!hasSeenWelcome) showWelcomeDialog = true
+    }
+    if (showWelcomeDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("خوش آمدید به بانک‌یار", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    WelcomeTip(Icons.Default.Settings, "تنظیمات اثر انگشت",
+                        "برای فعال‌سازی ورود با اثر انگشت به صفحه تنظیمات بروید.")
+                    WelcomeTip(Icons.Default.Backup, "پشتیبان‌گیری خودکار",
+                        "پشتیبان‌گیری خودکار هر ۳۰ دقیقه در تنظیمات قابل فعال‌سازی است.")
+                    WelcomeTip(Icons.Default.AccountBalance, "مدیریت حساب‌ها",
+                        "از منوی کشویی گزینه «حساب‌های بانکی» را انتخاب کنید تا حساب‌های خود را مدیریت کنید.")
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showWelcomeDialog = false
+                    scope.launch { prefs.markWelcomeSeen() }
+                }) {
+                    Text("متوجه شدم")
+                }
+            }
+        )
+    }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<Int>()) }
 
@@ -369,6 +408,18 @@ fun TransactionItem(t: Transaction, onClick: () -> Unit) {
                 Text(JalaliCalendar.toJalaliShort(t.date),
                     color = MaterialTheme.colorScheme.outline, fontSize = 10.sp)
             }
+        }
+    }
+}
+
+@Composable
+private fun WelcomeTip(icon: ImageVector, title: String, body: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp).padding(top = 2.dp))
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text(body, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
