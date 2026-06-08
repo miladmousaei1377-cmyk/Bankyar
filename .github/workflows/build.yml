@@ -5,6 +5,9 @@ on:
     branches: [ main, claude/project-updates-features-TMW5P ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -44,9 +47,31 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: bankyar-release
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 30
+
+      - name: Delete previous latest release
+        run: |
+          gh release delete latest --yes || true
+          git push origin :refs/tags/latest || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "آخرین نسخه بانک‌یار"
+          body: |
+            آخرین نسخه بانک‌یار — نصب مستقیم روی اندروید
+
+            **کامیت:** `${{ github.sha }}`
+            **شاخه:** `${{ github.ref_name }}`
+          files: app/build/outputs/apk/release/app-release.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
