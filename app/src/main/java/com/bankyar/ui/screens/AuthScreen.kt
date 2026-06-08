@@ -79,7 +79,7 @@ fun AuthScreen(viewModel: AuthViewModel, onAuthenticated: () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(36.dp))
+            Spacer(Modifier.height(64.dp))
 
             when (forgotStep) {
                 0 -> {
