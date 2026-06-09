@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
+import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AccountsViewModel
 
@@ -114,6 +115,8 @@ fun AccountsScreen(
             ) {
                 items(accounts, key = { it.id }) { acc ->
                     AccountCard(acc,
+                        userId = userId,
+                        viewModel = viewModel,
                         onEdit = { editAccount = acc; showDialog = true },
                         onDelete = { deleteTarget = acc }
                     )
@@ -124,7 +127,16 @@ fun AccountsScreen(
 }
 
 @Composable
-private fun AccountCard(acc: BankAccount, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun AccountCard(
+    acc: BankAccount,
+    userId: Int,
+    viewModel: AccountsViewModel,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val txNetBalance by viewModel.getNetBalance(userId, acc.title).collectAsState(initial = 0.0)
+    val netBalance = acc.initialBalance + txNetBalance
+
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -159,9 +171,20 @@ private fun AccountCard(acc: BankAccount, onEdit: () -> Unit, onDelete: () -> Un
                 if (acc.accountNumber.isNotBlank())
                     Text("شماره حساب: ${acc.accountNumber}",
                         color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
-                if (acc.initialBalance > 0.0)
-                    Text("موجودی اولیه: ${com.bankyar.ui.components.formatAmount(acc.initialBalance)} تومان",
-                        color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                // Net balance row
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(if (netBalance >= 0) Color(0xFFE8F5E9) else Color(0xFFFFEBEE))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("موجودی فعلی: ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text(
+                        "${formatAmount(netBalance)} تومان",
+                        color = if (netBalance >= 0) Color(0xFF2E7D32) else Color(0xFFC62828),
+                        fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                    )
+                }
             }
             IconButton(onEdit) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
             IconButton(onDelete) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }

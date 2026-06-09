@@ -36,4 +36,7 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions WHERE userId = :userId")
     suspend fun deleteAllByUser(userId: Int)
+
+    @Query("SELECT SUM(amount) FROM transactions WHERE userId = :userId AND accountName = :accountName AND type = :type")
+    fun sumByTypeAndAccount(userId: Int, accountName: String, type: TransactionType): Flow<Double?>
 }

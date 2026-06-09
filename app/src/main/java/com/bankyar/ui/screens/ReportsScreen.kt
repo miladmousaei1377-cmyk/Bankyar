@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -159,6 +160,18 @@ fun ReportsScreen(
                 }
             }
 
+            // Bar chart section
+            if (monthlyData.isNotEmpty()) {
+                item {
+                    Text("نمودار ماهانه", fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+                }
+                item {
+                    MonthlyBarChart(monthlyData.takeLast(6).reversed())
+                }
+            }
+
             // Monthly profit/loss section
             item {
                 Text("سود و زیان ماهانه", fontWeight = FontWeight.Bold,
@@ -271,6 +284,80 @@ private fun MiniStat(label: String, value: Double, color: Color, isCount: Boolea
             if (isCount) value.toInt().toString() else "${formatAmount(value)} ت",
             color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp
         )
+    }
+}
+
+@Composable
+private fun MonthlyBarChart(months: List<MonthlyData>) {
+    val maxValue = months.maxOfOrNull { maxOf(it.income, it.expense) }.takeIf { it != null && it > 0 } ?: 1.0
+    val incomeColor = Color(0xFF2E7D32)
+    val expenseColor = Color(0xFFC62828)
+    val barWidth = 18.dp
+
+    Card(
+        Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            // Legend
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(incomeColor))
+                    Spacer(Modifier.width(4.dp))
+                    Text("درآمد", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.width(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(expenseColor))
+                    Spacer(Modifier.width(4.dp))
+                    Text("هزینه", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+
+            val chartHeight = 120.dp
+            Row(
+                Modifier.fillMaxWidth().height(chartHeight + 24.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                months.forEach { m ->
+                    val incomeRatio = (m.income / maxValue).coerceIn(0.0, 1.0).toFloat()
+                    val expenseRatio = (m.expense / maxValue).coerceIn(0.0, 1.0).toFloat()
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
+                        modifier = Modifier.height(chartHeight + 24.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = Modifier.height(chartHeight)
+                        ) {
+                            // Income bar
+                            Box(
+                                Modifier.width(barWidth)
+                                    .fillMaxHeight(incomeRatio)
+                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                    .background(incomeColor)
+                            )
+                            // Expense bar
+                            Box(
+                                Modifier.width(barWidth)
+                                    .fillMaxHeight(expenseRatio)
+                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                    .background(expenseColor)
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        // Month label - show only mm/yy
+                        val shortLabel = m.monthLabel.take(5)
+                        Text(shortLabel, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
     }
 }
 

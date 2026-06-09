@@ -33,6 +33,9 @@ sealed class Screen(val route: String) {
     object Reports : Screen("reports")
     object About : Screen("about")
     object Settings : Screen("settings")
+    object Budget : Screen("budget")
+    object Debts : Screen("debts")
+    object Recurring : Screen("recurring")
 }
 
 @Composable
@@ -43,6 +46,9 @@ fun BankYarNavGraph() {
     val accountsViewModel: AccountsViewModel = viewModel()
     val profileViewModel: ProfileViewModel = viewModel()
     val themeViewModel: ThemeViewModel = viewModel()
+    val budgetViewModel: BudgetViewModel = viewModel()
+    val debtViewModel: DebtViewModel = viewModel()
+    val recurringViewModel: RecurringViewModel = viewModel()
 
     val loggedInUserId by authViewModel.loggedInUserId.collectAsState()
     val isSessionActive by authViewModel.isSessionActive.collectAsState()
@@ -58,6 +64,13 @@ fun BankYarNavGraph() {
                 UserRepository(AppDatabase.getInstance(context).userDao())
                     .getUserById(loggedInUserId).collect { user -> user?.let { userName = it.name } }
             }
+        }
+    }
+
+    // Process due recurring transactions when user is logged in
+    LaunchedEffect(loggedInUserId) {
+        if (loggedInUserId > 0) {
+            recurringViewModel.processDue(loggedInUserId)
         }
     }
 
@@ -130,7 +143,10 @@ fun BankYarNavGraph() {
                     onAccounts = { navController.navigate(Screen.Accounts.route) },
                     onReports = { navController.navigate(Screen.Reports.route) },
                     onAbout = { navController.navigate(Screen.About.route) },
-                    onSettings = { navController.navigate(Screen.Settings.route) }
+                    onSettings = { navController.navigate(Screen.Settings.route) },
+                    onBudget = { navController.navigate(Screen.Budget.route) },
+                    onDebts = { navController.navigate(Screen.Debts.route) },
+                    onRecurring = { navController.navigate(Screen.Recurring.route) }
                 )
             } else {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
@@ -210,6 +226,30 @@ fun BankYarNavGraph() {
                 userId = loggedInUserId,
                 biometricEnabled = biometricEnabled,
                 onBiometricToggle = { authViewModel.setBiometricEnabled(it) },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Budget.route) {
+            BudgetScreen(
+                userId = loggedInUserId,
+                viewModel = budgetViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Debts.route) {
+            DebtsScreen(
+                userId = loggedInUserId,
+                viewModel = debtViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Recurring.route) {
+            RecurringScreen(
+                userId = loggedInUserId,
+                viewModel = recurringViewModel,
                 onBack = { navController.popBackStack() }
             )
         }

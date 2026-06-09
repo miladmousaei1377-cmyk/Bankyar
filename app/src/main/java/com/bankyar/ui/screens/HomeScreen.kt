@@ -47,7 +47,10 @@ fun HomeScreen(
     onAccounts: () -> Unit,
     onReports: () -> Unit,
     onAbout: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onBudget: () -> Unit = {},
+    onDebts: () -> Unit = {},
+    onRecurring: () -> Unit = {}
 ) {
     val context = LocalContext.current
     LaunchedEffect(userId) { viewModel.setUser(userId) }
@@ -161,6 +164,15 @@ fun HomeScreen(
                 }
                 DrawerItem(Icons.Default.BarChart, "گزارشات") {
                     scope.launch { drawerState.close() }; onReports()
+                }
+                DrawerItem(Icons.Default.Savings, "بودجه‌بندی") {
+                    scope.launch { drawerState.close() }; onBudget()
+                }
+                DrawerItem(Icons.Default.AccountBalanceWallet, "بدهی و طلب") {
+                    scope.launch { drawerState.close() }; onDebts()
+                }
+                DrawerItem(Icons.Default.Repeat, "تراکنش‌های تکرارشونده") {
+                    scope.launch { drawerState.close() }; onRecurring()
                 }
                 DrawerItem(Icons.Default.Settings, "تنظیمات") {
                     scope.launch { drawerState.close() }; onSettings()

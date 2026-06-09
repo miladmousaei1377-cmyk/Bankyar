@@ -1,0 +1,58 @@
+package com.bankyar.ui.viewmodels
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.bankyar.data.database.AppDatabase
+import com.bankyar.data.database.entities.Budget
+import com.bankyar.data.database.entities.TransactionCategory
+import com.bankyar.data.database.entities.TransactionType
+import com.bankyar.util.JalaliCalendar
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class BudgetViewModel(app: Application) : AndroidViewModel(app) {
+    private val db = AppDatabase.getInstance(app)
+    private val _userId = MutableStateFlow(-1)
+
+    fun setUser(userId: Int) { _userId.value = userId }
+
+    fun currentYearMonth(): String {
+        val jalali = JalaliCalendar.toJalaliShort(System.currentTimeMillis())
+        return jalali.substring(jalali.indexOf('/') + 1)
+    }
+
+    fun getBudgetsForMonth(yearMonth: String): Flow<List<Budget>> =
+        _userId.flatMapLatest { uid ->
+            if (uid < 0) flowOf(emptyList()) else db.budgetDao().getByUserAndMonth(uid, yearMonth)
+        }
+
+    fun getSpentForCategory(category: TransactionCategory, yearMonth: String): Flow<Double> =
+        _userId.flatMapLatest { uid ->
+            if (uid < 0) flowOf(0.0)
+            else db.transactionDao().getAllByUser(uid).map { txs ->
+                txs.filter { t ->
+                    t.category == category && t.type == TransactionType.EXPENSE &&
+                    run {
+                        val jalali = JalaliCalendar.toJalaliShort(t.date)
+                        val txMonth = jalali.substring(jalali.indexOf('/') + 1)
+                        txMonth == yearMonth
+                    }
+                }.sumOf { it.amount }
+            }
+        }
+
+    fun saveBudget(userId: Int, categoryName: String, maxAmount: Double, yearMonth: String) =
+        viewModelScope.launch {
+            db.budgetDao().insert(Budget(
+                userId = userId,
+                categoryName = categoryName,
+                maxAmount = maxAmount,
+                yearMonth = yearMonth
+            ))
+        }
+
+    fun deleteBudget(budget: Budget) = viewModelScope.launch { db.budgetDao().delete(budget) }
+}

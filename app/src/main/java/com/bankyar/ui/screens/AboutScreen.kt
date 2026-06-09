@@ -80,42 +80,11 @@ fun AboutScreen(onBack: () -> Unit) {
                 )
             }
 
-            // Features card
-            AboutCard(title = "امکانات نرم‌افزار") {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    FeatureRow(Icons.Default.AddCard,
-                        "ثبت تراکنش",
-                        "ثبت درآمد، هزینه و انتقال با دسته‌بندی‌های متنوع")
-                    FeatureRow(Icons.Default.AccountBalance,
-                        "مدیریت حساب‌های بانکی",
-                        "افزودن حساب‌های مختلف با نام بانک، شماره کارت و موجودی اولیه")
-                    FeatureRow(Icons.Default.BarChart,
-                        "گزارش مالی",
-                        "نمودار درآمد و هزینه به تفکیک ماه و دسته‌بندی")
-                    FeatureRow(Icons.Default.Backup,
-                        "پشتیبان‌گیری",
-                        "بکاپ دستی به فایل JSON و بکاپ خودکار هر ۳۰ دقیقه در حافظه اصلی")
-                    FeatureRow(Icons.Default.Fingerprint,
-                        "ورود با اثر انگشت",
-                        "احراز هویت سریع با بیومتریک برای امنیت بیشتر")
-                    FeatureRow(Icons.Default.CalendarMonth,
-                        "تقویم شمسی",
-                        "نمایش کامل تاریخ‌ها بر اساس تقویم جلالی")
-                    FeatureRow(Icons.Default.DarkMode,
-                        "حالت تاریک",
-                        "پشتیبانی کامل از تم تاریک و روشن")
-                    FeatureRow(Icons.Default.Lock,
-                        "قفل نشست",
-                        "هر بار که برنامه بسته شود، هنگام بازگشایی هویت‌سنجی انجام می‌شود")
-                }
-            }
-
             // Tech info card
             AboutCard(title = "اطلاعات فنی") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     AboutRow(Icons.Default.Code, "نسخه نرم‌افزار", "۱.۰.۰")
                     AboutRow(Icons.Default.Person, "توسعه‌دهنده", "میلاد موسایی")
-                    AboutRow(Icons.Default.Storage, "پایگاه داده", "محلی — بدون سرور")
                     Row(
                         Modifier.clickable {
                             val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:miladmousaei1377@gmail.com"))
