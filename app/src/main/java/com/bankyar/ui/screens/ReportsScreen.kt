@@ -24,10 +24,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.theme.*
+import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
 
@@ -36,12 +38,17 @@ import com.bankyar.util.JalaliCalendar
 fun ReportsScreen(
     userId: Int,
     viewModel: TransactionViewModel,
+    accountsViewModel: AccountsViewModel,
     onBack: () -> Unit
 ) {
-    LaunchedEffect(userId) { viewModel.setUser(userId) }
+    LaunchedEffect(userId) {
+        viewModel.setUser(userId)
+        accountsViewModel.setUser(userId)
+    }
 
     val transactions by viewModel.transactions.collectAsState()
     val stats by viewModel.stats.collectAsState()
+    val accounts by accountsViewModel.accounts.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showFormatDialog by remember { mutableStateOf(false) }
@@ -114,6 +121,19 @@ fun ReportsScreen(
 
     val monthlyData = remember(transactions) { buildMonthlyData(transactions) }
 
+    // Per-account stats computed from in-memory transactions
+    data class AccountStat(val account: BankAccount, val income: Double, val expense: Double) {
+        val currentBalance: Double get() = account.initialBalance + income - expense
+    }
+    val accountStats = remember(transactions, accounts) {
+        accounts.map { acc ->
+            val txsForAcc = transactions.filter { it.accountName == acc.title }
+            val income = txsForAcc.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+            val expense = txsForAcc.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            AccountStat(acc, income, expense)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -169,6 +189,18 @@ fun ReportsScreen(
                 }
                 item {
                     MonthlyBarChart(monthlyData.takeLast(6).reversed())
+                }
+            }
+
+            // Per-account section
+            if (accountStats.isNotEmpty()) {
+                item {
+                    Text("خلاصه به‌تفکیک حساب", fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+                }
+                items(accountStats) { stat ->
+                    AccountReportCard(stat.account, stat.income, stat.expense, stat.currentBalance)
                 }
             }
 
@@ -356,6 +388,69 @@ private fun MonthlyBarChart(months: List<MonthlyData>) {
                         Text(shortLabel, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountReportCard(account: BankAccount, income: Double, expense: Double, currentBalance: Double) {
+    val isPositive = currentBalance >= 0
+    Card(
+        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountBalance, null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(account.title, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+                if (account.isDefault) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        Modifier.clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(0.12f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) { Text("پیش‌فرض", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp) }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("موجودی اولیه", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("${formatAmount(account.initialBalance)} تومان",
+                        color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("درآمد", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("+${formatAmount(income)} تومان",
+                        color = Color(0xFF2E7D32), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("هزینه", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("-${formatAmount(expense)} تومان",
+                        color = Color(0xFFC62828), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                    .background(if (isPositive) Color(0xFFE8F5E9) else Color(0xFFFFEBEE))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("موجودی فعلی:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Text(
+                    "${formatAmount(currentBalance)} تومان",
+                    color = if (isPositive) Color(0xFF1B5E20) else Color(0xFFB71C1C),
+                    fontWeight = FontWeight.Bold, fontSize = 15.sp
+                )
             }
         }
     }

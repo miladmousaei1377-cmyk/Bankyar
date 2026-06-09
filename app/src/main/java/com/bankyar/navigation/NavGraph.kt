@@ -213,6 +213,7 @@ fun BankYarNavGraph() {
             ReportsScreen(
                 userId = loggedInUserId,
                 viewModel = transactionViewModel,
+                accountsViewModel = accountsViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
