@@ -4,8 +4,18 @@ import android.content.Context
 import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.bankyar.data.database.dao.*
-import com.bankyar.data.database.entities.*
+import com.bankyar.data.database.dao.BankAccountDao
+import com.bankyar.data.database.dao.BudgetDao
+import com.bankyar.data.database.dao.DebtDao
+import com.bankyar.data.database.dao.RecurringTransactionDao
+import com.bankyar.data.database.dao.TransactionDao
+import com.bankyar.data.database.dao.UserDao
+import com.bankyar.data.database.entities.BankAccount
+import com.bankyar.data.database.entities.Budget
+import com.bankyar.data.database.entities.Debt
+import com.bankyar.data.database.entities.RecurringTransaction
+import com.bankyar.data.database.entities.Transaction
+import com.bankyar.data.database.entities.User
 
 @Database(
     entities = [User::class, Transaction::class, BankAccount::class,
@@ -13,6 +23,7 @@ import com.bankyar.data.database.entities.*
     version = 4,
     exportSchema = false
 )
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun transactionDao(): TransactionDao
