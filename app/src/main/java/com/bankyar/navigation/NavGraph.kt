@@ -1,5 +1,6 @@
 package com.bankyar.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,9 @@ sealed class Screen(val route: String) {
     object Budget : Screen("budget")
     object Debts : Screen("debts")
     object Recurring : Screen("recurring")
+    object AccountStatement : Screen("account_statement/{accountName}") {
+        fun route(accountName: String) = "account_statement/${Uri.encode(accountName)}"
+    }
 }
 
 @Composable
@@ -212,6 +216,20 @@ fun BankYarNavGraph() {
         composable(Screen.Reports.route) {
             ReportsScreen(
                 userId = loggedInUserId,
+                viewModel = transactionViewModel,
+                accountsViewModel = accountsViewModel,
+                onAccountClick = { navController.navigate(Screen.AccountStatement.route(it)) },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            Screen.AccountStatement.route,
+            arguments = listOf(navArgument("accountName") { type = NavType.StringType })
+        ) { back ->
+            AccountStatementScreen(
+                userId = loggedInUserId,
+                accountName = back.arguments?.getString("accountName") ?: return@composable,
                 viewModel = transactionViewModel,
                 accountsViewModel = accountsViewModel,
                 onBack = { navController.popBackStack() }

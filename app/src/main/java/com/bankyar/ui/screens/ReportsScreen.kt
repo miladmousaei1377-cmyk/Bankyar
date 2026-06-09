@@ -8,6 +8,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,6 +40,7 @@ fun ReportsScreen(
     userId: Int,
     viewModel: TransactionViewModel,
     accountsViewModel: AccountsViewModel,
+    onAccountClick: (String) -> Unit = {},
     onBack: () -> Unit
 ) {
     LaunchedEffect(userId) {
@@ -53,13 +55,22 @@ fun ReportsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showFormatDialog by remember { mutableStateOf(false) }
     var selectedFormat by remember { mutableStateOf("csv") }
+    var selectedExportFilter by remember { mutableStateOf("all") }
+
+    fun filteredTx(): List<Transaction> = when (selectedExportFilter) {
+        "income" -> transactions.filter { it.type == TransactionType.INCOME }
+        "expense" -> transactions.filter { it.type == TransactionType.EXPENSE }
+        "transfer" -> transactions.filter { it.type == TransactionType.TRANSFER }
+        else -> transactions
+    }
 
     val csvLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv")
     ) { uri ->
         uri?.let {
+            val list = filteredTx()
             context.contentResolver.openOutputStream(it)?.use { stream ->
-                stream.write(buildCsv(transactions).toByteArray(Charsets.UTF_8))
+                stream.write(buildCsv(list).toByteArray(Charsets.UTF_8))
             }
         }
     }
@@ -68,8 +79,11 @@ fun ReportsScreen(
         ActivityResultContracts.CreateDocument("text/plain")
     ) { uri ->
         uri?.let {
+            val list = filteredTx()
+            val inc = list.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
+            val exp = list.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
             context.contentResolver.openOutputStream(it)?.use { stream ->
-                stream.write(buildTxt(transactions, stats.totalBalance, stats.totalIncome, stats.totalExpense).toByteArray(Charsets.UTF_8))
+                stream.write(buildTxt(list, inc - exp, inc, exp).toByteArray(Charsets.UTF_8))
             }
         }
     }
@@ -78,8 +92,11 @@ fun ReportsScreen(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         uri?.let {
+            val list = filteredTx()
+            val inc = list.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
+            val exp = list.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
             context.contentResolver.openOutputStream(it)?.use { stream ->
-                val pdf = buildPdf(transactions, stats.totalBalance, stats.totalIncome, stats.totalExpense)
+                val pdf = buildPdf(list, inc - exp, inc, exp)
                 pdf.writeTo(stream)
                 pdf.close()
             }
@@ -89,9 +106,25 @@ fun ReportsScreen(
     if (showFormatDialog) {
         AlertDialog(
             onDismissRequest = { showFormatDialog = false },
-            title = { Text("انتخاب فرمت خروجی", fontWeight = FontWeight.Bold) },
+            title = { Text("دریافت فایل گزارش", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("فیلتر تراکنش‌ها", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    listOf(
+                        "all" to "همه تراکنش‌ها",
+                        "income" to "درآمد",
+                        "expense" to "هزینه",
+                        "transfer" to "انتقال"
+                    ).forEach { (filter, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()) {
+                            RadioButton(selected = selectedExportFilter == filter,
+                                onClick = { selectedExportFilter = filter })
+                            Text(label, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
+                    Text("فرمت فایل", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     listOf("csv" to "CSV (اکسل)", "txt" to "TXT (متنی)", "pdf" to "PDF").forEach { (fmt, label) ->
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()) {
@@ -200,7 +233,8 @@ fun ReportsScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
                 }
                 items(accountStats) { stat ->
-                    AccountReportCard(stat.account, stat.income, stat.expense, stat.currentBalance)
+                    AccountReportCard(stat.account, stat.income, stat.expense, stat.currentBalance,
+                        onClick = { onAccountClick(stat.account.title) })
                 }
             }
 
@@ -223,31 +257,6 @@ fun ReportsScreen(
                 }
             }
 
-            item {
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("همه تراکنش‌ها (${transactions.size})",
-                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                    TextButton({ showFormatDialog = true }) {
-                        Icon(Icons.Default.FileDownload, null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("دریافت فایل", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
-                    }
-                }
-            }
-
-            if (transactions.isEmpty()) {
-                item {
-                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-                        Text("هیچ تراکنشی یافت نشد", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            } else {
-                items(transactions, key = { it.id }) { t ->
-                    TransactionItem(t, onClick = {})
-                }
-            }
         }
     }
 }
@@ -394,10 +403,10 @@ private fun MonthlyBarChart(months: List<MonthlyData>) {
 }
 
 @Composable
-private fun AccountReportCard(account: BankAccount, income: Double, expense: Double, currentBalance: Double) {
+private fun AccountReportCard(account: BankAccount, income: Double, expense: Double, currentBalance: Double, onClick: () -> Unit = {}) {
     val isPositive = currentBalance >= 0
     Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
