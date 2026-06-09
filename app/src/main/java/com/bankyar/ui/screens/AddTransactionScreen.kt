@@ -94,6 +94,20 @@ fun AddTransactionScreen(
                 .padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (accounts.isEmpty() && !isEdit) {
+                Card(
+                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+                ) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, null,
+                            tint = Color(0xFFE65100), modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("حسابی ثبت نشده است. لطفاً ابتدا از بخش مدیریت حساب‌ها یک حساب اضافه کنید.",
+                            color = Color(0xFFE65100), fontSize = 13.sp)
+                    }
+                }
+            }
             // Type
             FormCard("نوع تراکنش") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

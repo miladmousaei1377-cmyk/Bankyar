@@ -8,10 +8,8 @@ import android.graphics.pdf.PdfDocument
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
@@ -25,7 +23,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.ui.components.formatAmount
@@ -52,10 +49,10 @@ fun ReportsScreen(
     val stats by viewModel.stats.collectAsState()
     val accounts by accountsViewModel.accounts.collectAsState()
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
-    var showFormatDialog by remember { mutableStateOf(false) }
     var selectedFormat by remember { mutableStateOf("csv") }
     var selectedExportFilter by remember { mutableStateOf("all") }
+    var selectedAccountName by remember { mutableStateOf("") }
+    var accountDropdownExpanded by remember { mutableStateOf(false) }
 
     fun filteredTx(): List<Transaction> = when (selectedExportFilter) {
         "income" -> transactions.filter { it.type == TransactionType.INCOME }
@@ -103,81 +100,13 @@ fun ReportsScreen(
         }
     }
 
-    if (showFormatDialog) {
-        AlertDialog(
-            onDismissRequest = { showFormatDialog = false },
-            title = { Text("دریافت فایل گزارش", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("فیلتر تراکنش‌ها", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                    listOf(
-                        "all" to "همه تراکنش‌ها",
-                        "income" to "درآمد",
-                        "expense" to "هزینه",
-                        "transfer" to "انتقال"
-                    ).forEach { (filter, label) ->
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()) {
-                            RadioButton(selected = selectedExportFilter == filter,
-                                onClick = { selectedExportFilter = filter })
-                            Text(label, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
-                    Text("فرمت فایل", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                    listOf("csv" to "CSV (اکسل)", "txt" to "TXT (متنی)", "pdf" to "PDF").forEach { (fmt, label) ->
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()) {
-                            RadioButton(selected = selectedFormat == fmt,
-                                onClick = { selectedFormat = fmt })
-                            Text(label, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showFormatDialog = false
-                    val fileName = "bankyar_report_${System.currentTimeMillis()}"
-                    when (selectedFormat) {
-                        "csv" -> csvLauncher.launch("$fileName.csv")
-                        "txt" -> txtLauncher.launch("$fileName.txt")
-                        "pdf" -> pdfLauncher.launch("$fileName.pdf")
-                    }
-                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                    Text("دانلود", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = { TextButton({ showFormatDialog = false }) { Text("انصراف") } }
-        )
-    }
-
     val monthlyData = remember(transactions) { buildMonthlyData(transactions) }
 
-    // Per-account stats computed from in-memory transactions
-    data class AccountStat(val account: BankAccount, val income: Double, val expense: Double) {
-        val currentBalance: Double get() = account.initialBalance + income - expense
-    }
-    val accountStats = remember(transactions, accounts) {
-        accounts.map { acc ->
-            val txsForAcc = transactions.filter { it.accountName == acc.title }
-            val income = txsForAcc.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
-            val expense = txsForAcc.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
-            AccountStat(acc, income, expense)
-        }
-    }
-
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("گزارشات", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.Default.ArrowBack, null) } },
-                actions = {
-                    IconButton({ showFormatDialog = true }) {
-                        Icon(Icons.Default.FileDownload, null, tint = Color.White)
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
@@ -213,7 +142,7 @@ fun ReportsScreen(
                 }
             }
 
-            // Bar chart section
+            // Bar chart
             if (monthlyData.isNotEmpty()) {
                 item {
                     Text("نمودار ماهانه", fontWeight = FontWeight.Bold,
@@ -225,38 +154,147 @@ fun ReportsScreen(
                 }
             }
 
-            // Per-account section
-            if (accountStats.isNotEmpty()) {
+            // Per-account statement section
+            if (accounts.isNotEmpty()) {
                 item {
-                    Text("خلاصه به‌تفکیک حساب", fontWeight = FontWeight.Bold,
+                    Text("صورتحساب حساب‌ها", fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
                 }
-                items(accountStats) { stat ->
-                    AccountReportCard(stat.account, stat.income, stat.expense, stat.currentBalance,
-                        onClick = { onAccountClick(stat.account.title) })
-                }
-            }
-
-            // Monthly profit/loss section
-            item {
-                Text("سود و زیان ماهانه", fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(top = 4.dp))
-            }
-
-            if (monthlyData.isEmpty()) {
                 item {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                        Text("داده‌ای برای نمایش وجود ندارد", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Card(
+                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ExposedDropdownMenuBox(
+                                expanded = accountDropdownExpanded,
+                                onExpandedChange = { accountDropdownExpanded = it }
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedAccountName,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("انتخاب حساب") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(accountDropdownExpanded) },
+                                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = accountDropdownExpanded,
+                                    onDismissRequest = { accountDropdownExpanded = false }
+                                ) {
+                                    accounts.forEach { acc ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(acc.title)
+                                                    if (acc.isDefault) {
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text("(پیش‌فرض)",
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            fontSize = 11.sp)
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedAccountName = acc.title
+                                                accountDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            Button(
+                                onClick = { onAccountClick(selectedAccountName) },
+                                enabled = selectedAccountName.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Icon(Icons.Default.Receipt, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("نمایش صورتحساب", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
-            } else {
-                items(monthlyData) { month ->
-                    MonthlyProfitCard(month)
-                }
             }
 
+            // Export section (replaces monthly profit/loss)
+            item {
+                Text("دریافت اطلاعات", fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+            }
+            item {
+                Card(
+                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("فیلتر تراکنش‌ها", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("all" to "همه", "income" to "درآمد", "expense" to "هزینه", "transfer" to "انتقال")
+                                .forEach { (key, label) ->
+                                    FilterChip(
+                                        selected = selectedExportFilter == key,
+                                        onClick = { selectedExportFilter = key },
+                                        label = { Text(label, fontSize = 12.sp) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
+
+                        Text("فرمت فایل", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("csv" to "CSV", "txt" to "TXT", "pdf" to "PDF").forEach { (key, label) ->
+                                FilterChip(
+                                    selected = selectedFormat == key,
+                                    onClick = { selectedFormat = key },
+                                    label = { Text(label, fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                val fileName = "bankyar_report_${System.currentTimeMillis()}"
+                                when (selectedFormat) {
+                                    "csv" -> csvLauncher.launch("$fileName.csv")
+                                    "txt" -> txtLauncher.launch("$fileName.txt")
+                                    "pdf" -> pdfLauncher.launch("$fileName.pdf")
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(Icons.Default.FileDownload, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("دانلود فایل گزارش", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -270,7 +308,6 @@ data class MonthlyData(
 
 private fun buildMonthlyData(transactions: List<Transaction>): List<MonthlyData> {
     val grouped = transactions.groupBy { t ->
-        // Format: day/mm/yyyy → extract mm/yyyy as the group key
         val jalali = JalaliCalendar.toJalaliShort(t.date)
         jalali.substring(jalali.indexOf('/') + 1)
     }
@@ -281,40 +318,6 @@ private fun buildMonthlyData(transactions: List<Transaction>): List<MonthlyData>
             val expense = txList.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
             MonthlyData(month, income, expense, income - expense)
         }
-}
-
-@Composable
-private fun MonthlyProfitCard(data: MonthlyData) {
-    val isProfit = data.profit >= 0
-    Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(data.monthLabel, fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("درآمد: ${formatAmount(data.income)} ت",
-                        color = Color(0xFF2E7D32), fontSize = 11.sp)
-                    Text("هزینه: ${formatAmount(data.expense)} ت",
-                        color = Color(0xFFC62828), fontSize = 11.sp)
-                }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    "${if (isProfit) "+" else ""}${formatAmount(data.profit)} ت",
-                    color = if (isProfit) Color(0xFF2E7D32) else Color(0xFFC62828),
-                    fontWeight = FontWeight.Bold, fontSize = 14.sp
-                )
-                Text(if (isProfit) "سود" else "زیان",
-                    color = if (isProfit) Color(0xFF2E7D32) else Color(0xFFC62828),
-                    fontSize = 11.sp)
-            }
-        }
-    }
 }
 
 @Composable
@@ -341,7 +344,6 @@ private fun MonthlyBarChart(months: List<MonthlyData>) {
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
-            // Legend
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(incomeColor))
@@ -376,14 +378,12 @@ private fun MonthlyBarChart(months: List<MonthlyData>) {
                             verticalAlignment = Alignment.Bottom,
                             modifier = Modifier.height(chartHeight)
                         ) {
-                            // Income bar
                             Box(
                                 Modifier.width(barWidth)
                                     .fillMaxHeight(incomeRatio)
                                     .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                                     .background(incomeColor)
                             )
-                            // Expense bar
                             Box(
                                 Modifier.width(barWidth)
                                     .fillMaxHeight(expenseRatio)
@@ -392,74 +392,10 @@ private fun MonthlyBarChart(months: List<MonthlyData>) {
                             )
                         }
                         Spacer(Modifier.height(4.dp))
-                        // Month label - show only mm/yy
                         val shortLabel = m.monthLabel.take(5)
                         Text(shortLabel, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AccountReportCard(account: BankAccount, income: Double, expense: Double, currentBalance: Double, onClick: () -> Unit = {}) {
-    val isPositive = currentBalance >= 0
-    Card(
-        Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountBalance, null,
-                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(account.title, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
-                if (account.isDefault) {
-                    Spacer(Modifier.width(6.dp))
-                    Box(
-                        Modifier.clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(0.12f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) { Text("پیش‌فرض", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp) }
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("موجودی اولیه", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                    Text("${formatAmount(account.initialBalance)} تومان",
-                        color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("درآمد", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                    Text("+${formatAmount(income)} تومان",
-                        color = Color(0xFF2E7D32), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("هزینه", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                    Text("-${formatAmount(expense)} تومان",
-                        color = Color(0xFFC62828), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-            }
-
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                    .background(if (isPositive) Color(0xFFE8F5E9) else Color(0xFFFFEBEE))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("موجودی فعلی:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                Text(
-                    "${formatAmount(currentBalance)} تومان",
-                    color = if (isPositive) Color(0xFF1B5E20) else Color(0xFFB71C1C),
-                    fontWeight = FontWeight.Bold, fontSize = 15.sp
-                )
             }
         }
     }
@@ -509,23 +445,14 @@ private fun buildPdf(list: List<Transaction>, balance: Double, income: Double, e
     val lineHeight = 20f
 
     val titlePaint = Paint().apply {
-        color = AndroidColor.rgb(26, 115, 232)
-        textSize = 18f
-        typeface = Typeface.DEFAULT_BOLD
-        isAntiAlias = true
-        textAlign = Paint.Align.CENTER
+        color = AndroidColor.rgb(26, 115, 232); textSize = 18f
+        typeface = Typeface.DEFAULT_BOLD; isAntiAlias = true; textAlign = Paint.Align.CENTER
     }
     val headerPaint = Paint().apply {
-        color = AndroidColor.rgb(26, 115, 232)
-        textSize = 13f
-        typeface = Typeface.DEFAULT_BOLD
-        isAntiAlias = true
+        color = AndroidColor.rgb(26, 115, 232); textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD; isAntiAlias = true
     }
-    val bodyPaint = Paint().apply {
-        color = AndroidColor.DKGRAY
-        textSize = 11f
-        isAntiAlias = true
-    }
+    val bodyPaint = Paint().apply { color = AndroidColor.DKGRAY; textSize = 11f; isAntiAlias = true }
     val greenPaint = Paint().apply { color = AndroidColor.rgb(46, 125, 50); textSize = 11f; isAntiAlias = true }
     val redPaint = Paint().apply { color = AndroidColor.rgb(198, 40, 40); textSize = 11f; isAntiAlias = true }
     val dividerPaint = Paint().apply { color = AndroidColor.LTGRAY; strokeWidth = 1f }
@@ -538,39 +465,25 @@ private fun buildPdf(list: List<Transaction>, balance: Double, income: Double, e
 
     canvas.drawText("بانک‌یار - گزارش تراکنش‌ها", pageWidth / 2f, y, titlePaint)
     y += lineHeight * 1.5f
-    canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint)
-    y += lineHeight
-
-    canvas.drawText("موجودی: ${formatAmount(balance)} تومان", margin, y, headerPaint)
-    y += lineHeight
-    canvas.drawText("درآمد کل: ${formatAmount(income)} تومان", margin, y, greenPaint)
-    y += lineHeight
-    canvas.drawText("هزینه کل: ${formatAmount(expense)} تومان", margin, y, redPaint)
-    y += lineHeight
-    canvas.drawText("تعداد تراکنش: ${list.size}", margin, y, bodyPaint)
-    y += lineHeight * 1.5f
-    canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint)
-    y += lineHeight
+    canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint); y += lineHeight
+    canvas.drawText("موجودی: ${formatAmount(balance)} تومان", margin, y, headerPaint); y += lineHeight
+    canvas.drawText("درآمد کل: ${formatAmount(income)} تومان", margin, y, greenPaint); y += lineHeight
+    canvas.drawText("هزینه کل: ${formatAmount(expense)} تومان", margin, y, redPaint); y += lineHeight
+    canvas.drawText("تعداد تراکنش: ${list.size}", margin, y, bodyPaint); y += lineHeight * 1.5f
+    canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint); y += lineHeight
 
     for (t in list) {
         if (y > pageHeight - margin * 2) {
-            document.finishPage(page)
-            pageNum++
+            document.finishPage(page); pageNum++
             pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
-            page = document.startPage(pageInfo)
-            canvas = page.canvas
-            y = margin + 20f
+            page = document.startPage(pageInfo); canvas = page.canvas; y = margin + 20f
         }
         val type = when (t.type) { TransactionType.INCOME -> "درآمد"; TransactionType.EXPENSE -> "هزینه"; TransactionType.TRANSFER -> "انتقال" }
         val prefix = when (t.type) { TransactionType.INCOME -> "+"; TransactionType.EXPENSE -> "-"; else -> "" }
         val amountPaint = when (t.type) { TransactionType.INCOME -> greenPaint; TransactionType.EXPENSE -> redPaint; else -> bodyPaint }
-
-        canvas.drawText("${JalaliCalendar.toJalaliShort(t.date)}  |  ${t.title}  |  $type", margin, y, bodyPaint)
-        y += lineHeight
-        canvas.drawText("$prefix${formatAmount(t.amount)} تومان  |  ${t.category.label}  |  ${t.accountName}", margin, y, amountPaint)
-        y += lineHeight
-        canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint)
-        y += lineHeight * 0.5f
+        canvas.drawText("${JalaliCalendar.toJalaliShort(t.date)}  |  ${t.title}  |  $type", margin, y, bodyPaint); y += lineHeight
+        canvas.drawText("$prefix${formatAmount(t.amount)} تومان  |  ${t.category.label}  |  ${t.accountName}", margin, y, amountPaint); y += lineHeight
+        canvas.drawLine(margin, y, pageWidth - margin, y, dividerPaint); y += lineHeight * 0.5f
     }
 
     document.finishPage(page)

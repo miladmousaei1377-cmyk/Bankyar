@@ -139,6 +139,7 @@ fun BankYarNavGraph() {
                     userName = userName,
                     isDarkMode = isDarkMode,
                     viewModel = transactionViewModel,
+                    accountsViewModel = accountsViewModel,
                     onToggleDarkMode = { themeViewModel.toggle() },
                     onAddTransaction = { navController.navigate(Screen.AddTransaction.route()) },
                     onViewAll = { navController.navigate(Screen.Transactions.route) },
