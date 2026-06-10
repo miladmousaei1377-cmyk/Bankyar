@@ -2,6 +2,7 @@ package com.bankyar.ui.screens
 
 import android.app.Activity
 import androidx.compose.foundation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,7 +37,7 @@ import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     userId: Int,
