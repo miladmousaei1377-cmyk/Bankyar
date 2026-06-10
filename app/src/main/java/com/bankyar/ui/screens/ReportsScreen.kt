@@ -401,7 +401,7 @@ private fun MonthlyBarChart(months: List<MonthlyData>) {
     }
 }
 
-private fun buildCsv(list: List<Transaction>): String {
+internal fun buildCsv(list: List<Transaction>): String {
     val sb = StringBuilder()
     sb.appendLine("تاریخ,عنوان,مبلغ,نوع,دسته‌بندی,حساب,توضیحات")
     list.forEach { t ->
@@ -412,7 +412,7 @@ private fun buildCsv(list: List<Transaction>): String {
     return sb.toString()
 }
 
-private fun buildTxt(list: List<Transaction>, balance: Double, income: Double, expense: Double): String {
+internal fun buildTxt(list: List<Transaction>, balance: Double, income: Double, expense: Double): String {
     val sb = StringBuilder()
     sb.appendLine("═══════════════════════════════════════════")
     sb.appendLine("          بانک‌یار - گزارش تراکنش‌ها")
@@ -437,7 +437,7 @@ private fun buildTxt(list: List<Transaction>, balance: Double, income: Double, e
     return sb.toString()
 }
 
-private fun buildPdf(list: List<Transaction>, balance: Double, income: Double, expense: Double): PdfDocument {
+internal fun buildPdf(list: List<Transaction>, balance: Double, income: Double, expense: Double): PdfDocument {
     val document = PdfDocument()
     val pageWidth = 595
     val pageHeight = 842

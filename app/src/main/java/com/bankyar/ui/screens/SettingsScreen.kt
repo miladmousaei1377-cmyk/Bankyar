@@ -1,6 +1,8 @@
 package com.bankyar.ui.screens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -18,13 +20,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.work.*
+import com.bankyar.data.PreferencesManager
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.Transaction
@@ -33,6 +38,7 @@ import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.util.BackupWorker
 import com.bankyar.util.BiometricHelper
 import com.bankyar.util.JalaliCalendar
+import com.bankyar.util.ReminderWorker
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -49,9 +55,60 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val prefs = remember { PreferencesManager(context) }
 
     var autoBackupEnabled by remember { mutableStateOf(false) }
     var lastAutoBackupTime by remember { mutableStateOf("") }
+
+    val reminderEnabled by prefs.reminderEnabled.collectAsState(initial = false)
+    val reminderHour by prefs.reminderHour.collectAsState(initial = 20)
+    val reminderMinute by prefs.reminderMinute.collectAsState(initial = 0)
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            scope.launch {
+                prefs.setReminderEnabled(true)
+                ReminderWorker.schedule(context, reminderHour, reminderMinute)
+                snackbarHostState.showSnackbar("یادآور فعال شد")
+            }
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("دسترسی به اعلان‌ها داده نشد") }
+        }
+    }
+
+    fun requestEnableReminder() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            scope.launch {
+                prefs.setReminderEnabled(true)
+                ReminderWorker.schedule(context, reminderHour, reminderMinute)
+                snackbarHostState.showSnackbar("یادآور فعال شد")
+            }
+        }
+    }
+
+    if (showTimePicker) {
+        ReminderTimePickerDialog(
+            initialHour = reminderHour,
+            initialMinute = reminderMinute,
+            onConfirm = { h, m ->
+                showTimePicker = false
+                scope.launch {
+                    prefs.setReminderTime(h, m)
+                    if (reminderEnabled) ReminderWorker.schedule(context, h, m)
+                    snackbarHostState.showSnackbar("زمان یادآور به ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')} تغییر کرد")
+                }
+            },
+            onDismiss = { showTimePicker = false }
+        )
+    }
 
     val storagePermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -171,6 +228,60 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp
                     )
+                }
+            }
+
+            // Reminder card
+            SettingsCard(title = "یادآور ثبت تراکنش") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("یادآور روزانه", fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface)
+                            Text("هر روز در ساعت مشخص یادآوری ثبت تراکنش",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = reminderEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled) requestEnableReminder()
+                                else scope.launch {
+                                    prefs.setReminderEnabled(false)
+                                    ReminderWorker.cancel(context)
+                                    snackbarHostState.showSnackbar("یادآور غیرفعال شد")
+                                }
+                            }
+                        )
+                    }
+                    if (reminderEnabled) {
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(0.3f))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("ساعت یادآور", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                Text(
+                                    "${reminderHour.toString().padStart(2,'0')}:${reminderMinute.toString().padStart(2,'0')}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary, fontSize = 22.sp
+                                )
+                            }
+                            TextButton({ showTimePicker = true }) {
+                                Icon(Icons.Default.Schedule, null,
+                                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("تغییر ساعت", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -363,6 +474,37 @@ private fun scheduleAutoBackup(context: android.content.Context) {
         BackupWorker.WORK_NAME,
         ExistingPeriodicWorkPolicy.UPDATE,
         request
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderTimePickerDialog(
+    initialHour: Int,
+    initialMinute: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val state = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ساعت یادآور", fontWeight = FontWeight.Bold) },
+        text = {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimePicker(state = state)
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(state.hour, state.minute) },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                Text("تأیید", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("انصراف") } }
     )
 }
 

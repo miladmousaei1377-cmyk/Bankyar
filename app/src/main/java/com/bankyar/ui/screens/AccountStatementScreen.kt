@@ -1,5 +1,8 @@
 package com.bankyar.ui.screens
 
+import android.graphics.pdf.PdfDocument
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,12 +11,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,11 +43,15 @@ fun AccountStatementScreen(
 
     val transactions by viewModel.transactions.collectAsState()
     val accounts by accountsViewModel.accounts.collectAsState()
+    val context = LocalContext.current
+
+    var selectedFilter by remember { mutableStateOf("all") }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var selectedExportFormat by remember { mutableStateOf("csv") }
 
     val account = accounts.find { it.title == accountName }
     val accountTx = remember(transactions, accountName) {
-        transactions.filter { it.accountName == accountName }
-            .sortedByDescending { it.date }
+        transactions.filter { it.accountName == accountName }.sortedByDescending { it.date }
     }
     val income = remember(accountTx) { accountTx.filter { it.type == TransactionType.INCOME }.sumOf { it.amount } }
     val expense = remember(accountTx) { accountTx.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount } }
@@ -50,11 +59,91 @@ fun AccountStatementScreen(
     val currentBalance = initialBalance + income - expense
     val isPositive = currentBalance >= 0
 
+    val displayedTx = remember(accountTx, selectedFilter) {
+        when (selectedFilter) {
+            "income" -> accountTx.filter { it.type == TransactionType.INCOME }
+            "expense" -> accountTx.filter { it.type == TransactionType.EXPENSE }
+            "transfer" -> accountTx.filter { it.type == TransactionType.TRANSFER }
+            else -> accountTx
+        }
+    }
+
+    val csvLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.openOutputStream(it)?.use { stream ->
+                stream.write(buildCsv(displayedTx).toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+    val txtLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        uri?.let {
+            val inc = displayedTx.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
+            val exp = displayedTx.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            context.contentResolver.openOutputStream(it)?.use { stream ->
+                stream.write(buildTxt(displayedTx, inc - exp, inc, exp).toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+    val pdfLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        uri?.let {
+            val inc = displayedTx.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
+            val exp = displayedTx.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            context.contentResolver.openOutputStream(it)?.use { stream ->
+                val pdf: PdfDocument = buildPdf(displayedTx, inc - exp, inc, exp)
+                pdf.writeTo(stream); pdf.close()
+            }
+        }
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { Text("دریافت گزارش حساب", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("فرمت فایل", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    listOf("csv" to "CSV (اکسل)", "txt" to "TXT (متنی)", "pdf" to "PDF").forEach { (fmt, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            RadioButton(selected = selectedExportFormat == fmt,
+                                onClick = { selectedExportFormat = fmt })
+                            Text(label, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showExportDialog = false
+                    val fn = "bankyar_${accountName}_${System.currentTimeMillis()}"
+                    when (selectedExportFormat) {
+                        "csv" -> csvLauncher.launch("$fn.csv")
+                        "txt" -> txtLauncher.launch("$fn.txt")
+                        "pdf" -> pdfLauncher.launch("$fn.pdf")
+                    }
+                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Text("دانلود", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ showExportDialog = false }) { Text("انصراف") } }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(accountName, fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.Default.ArrowBack, null) } },
+                actions = {
+                    IconButton({ showExportDialog = true }) {
+                        Icon(Icons.Default.FileDownload, null, tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
@@ -68,6 +157,7 @@ fun AccountStatementScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Account summary card
             item {
                 Card(
                     Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
@@ -97,14 +187,12 @@ fun AccountStatementScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("درآمد", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                 Text("+${formatAmount(income)} تومان",
-                                    color = Color(0xFF2E7D32), fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium)
+                                    color = Color(0xFF2E7D32), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("هزینه", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                 Text("-${formatAmount(expense)} تومان",
-                                    color = Color(0xFFC62828), fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium)
+                                    color = Color(0xFFC62828), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                         Row(
@@ -126,22 +214,41 @@ fun AccountStatementScreen(
                 }
             }
 
+            // Filter chips
             item {
-                Text("تراکنش‌های این حساب (${accountTx.size})",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(top = 4.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("all" to "همه", "income" to "درآمد", "expense" to "هزینه", "transfer" to "انتقال")
+                        .forEach { (key, label) ->
+                            FilterChip(
+                                selected = selectedFilter == key,
+                                onClick = { selectedFilter = key },
+                                label = { Text(label, fontSize = 12.sp) }
+                            )
+                        }
+                }
             }
 
-            if (accountTx.isEmpty()) {
+            item {
+                Text(
+                    "تراکنش‌های این حساب (${displayedTx.size})",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            if (displayedTx.isEmpty()) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-                        Text("هیچ تراکنشی برای این حساب یافت نشد",
+                        Text("تراکنشی برای نمایش وجود ندارد",
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
-                items(accountTx, key = { it.id }) { t ->
+                items(displayedTx, key = { it.id }) { t ->
                     TransactionItem(t, onClick = {})
                 }
             }

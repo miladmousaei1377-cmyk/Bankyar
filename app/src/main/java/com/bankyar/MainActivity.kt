@@ -15,10 +15,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bankyar.navigation.BankYarNavGraph
 import com.bankyar.ui.theme.BankYarTheme
 import com.bankyar.ui.viewmodels.ThemeViewModel
+import com.bankyar.util.NotificationHelper
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NotificationHelper.createChannel(this)
         enableEdgeToEdge()
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
