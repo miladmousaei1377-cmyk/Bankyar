@@ -28,8 +28,9 @@ class AccountsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun getNetBalance(userId: Int, accountName: String): Flow<Double> = combine(
         txDao.sumByTypeAndAccount(userId, accountName, TransactionType.INCOME),
-        txDao.sumByTypeAndAccount(userId, accountName, TransactionType.EXPENSE)
-    ) { inc, exp -> (inc ?: 0.0) - (exp ?: 0.0) }
+        txDao.sumByTypeAndAccount(userId, accountName, TransactionType.EXPENSE),
+        txDao.sumByTypeAndAccount(userId, accountName, TransactionType.TRANSFER)
+    ) { inc, exp, tr -> (inc ?: 0.0) - (exp ?: 0.0) - (tr ?: 0.0) }
 
     fun addAccount(account: BankAccount) = viewModelScope.launch {
         repo.insert(account); _message.value = "حساب با موفقیت اضافه شد"
