@@ -236,7 +236,8 @@ private fun BudgetDialog(
                 fontWeight = FontWeight.Bold)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.imePadding().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Category dropdown
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,

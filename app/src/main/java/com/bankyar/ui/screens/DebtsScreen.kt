@@ -289,7 +289,8 @@ private fun DebtDialog(
         onDismissRequest = onDismiss,
         title = { Text("ثبت بدهی / طلب", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.imePadding().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = personName,
                     onValueChange = { personName = it },

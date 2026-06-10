@@ -211,7 +211,8 @@ private fun AccountDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (account == null) "افزودن حساب" else "ویرایش حساب", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.imePadding().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AccountField("نام حساب (اجباری)", title, { title = it }, Icons.Default.Label)
                 AccountField("نام بانک", bankName, { bankName = it }, Icons.Default.AccountBalance)
                 AccountField("شماره کارت", cardNumber, { cardNumber = it },

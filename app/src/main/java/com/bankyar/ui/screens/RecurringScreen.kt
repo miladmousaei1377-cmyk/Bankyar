@@ -208,7 +208,7 @@ private fun RecurringDialog(
         title = { Text("تراکنش تکرارشونده جدید", fontWeight = FontWeight.Bold) },
         text = {
             Column(
-                Modifier.verticalScroll(rememberScrollState()),
+                Modifier.imePadding().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Type selector

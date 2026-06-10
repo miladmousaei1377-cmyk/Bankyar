@@ -91,7 +91,7 @@ fun AddTransactionScreen(
     ) { padding ->
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+                .padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (accounts.isEmpty() && !isEdit) {
