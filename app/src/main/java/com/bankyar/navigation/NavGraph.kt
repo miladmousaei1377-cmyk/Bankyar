@@ -25,6 +25,7 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
     object Accounts : Screen("accounts")
     object Reports : Screen("reports")
+    object Budget : Screen("budget")
     object About : Screen("about")
 }
 
@@ -36,6 +37,7 @@ fun BankYarNavGraph() {
     val accountsViewModel: AccountsViewModel = viewModel()
     val profileViewModel: ProfileViewModel = viewModel()
     val themeViewModel: ThemeViewModel = viewModel()
+    val budgetViewModel: BudgetViewModel = viewModel()
 
     val loggedInUserId by authViewModel.loggedInUserId.collectAsState()
     val isDarkMode by themeViewModel.isDarkMode.collectAsState()
@@ -78,6 +80,7 @@ fun BankYarNavGraph() {
                     onProfile = { navController.navigate(Screen.Profile.route) },
                     onAccounts = { navController.navigate(Screen.Accounts.route) },
                     onReports = { navController.navigate(Screen.Reports.route) },
+                    onBudget = { navController.navigate(Screen.Budget.route) },
                     onAbout = { navController.navigate(Screen.About.route) },
                     onLogout = {
                         authViewModel.logout()
@@ -143,6 +146,14 @@ fun BankYarNavGraph() {
             ReportsScreen(
                 userId = loggedInUserId,
                 viewModel = transactionViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Budget.route) {
+            BudgetScreen(
+                userId = loggedInUserId,
+                viewModel = budgetViewModel,
                 onBack = { navController.popBackStack() }
             )
         }

@@ -15,6 +15,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.ui.theme.*
@@ -34,6 +36,7 @@ fun ProfileScreen(
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var editMode by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(user) {
         user?.let { name = it.name; phone = it.phone }
@@ -43,6 +46,16 @@ fun ProfileScreen(
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
             editMode = false
+            showPinDialog = false
+        }
+    }
+
+    if (showPinDialog) {
+        user?.let { u ->
+            ChangePinDialog(
+                onConfirm = { cur, new_, conf -> viewModel.changePin(u, cur, new_, conf) },
+                onDismiss = { showPinDialog = false }
+            )
         }
     }
 
@@ -173,6 +186,103 @@ fun ProfileScreen(
                     }
                 }
             }
+
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("تغییر رمز عبور", fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface)
+                            Text("رمز PIN ورود به برنامه",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { showPinDialog = true },
+                        shape = RoundedCornerShape(10.dp)
+                    ) { Text("تغییر") }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun ChangePinDialog(
+    onConfirm: (String, String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var currentPin by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var confirmPin by remember { mutableStateOf("") }
+    var showCurrent by remember { mutableStateOf(false) }
+    var showNew by remember { mutableStateOf(false) }
+    var showConfirm by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("تغییر رمز عبور", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = currentPin, onValueChange = { currentPin = it.filter(Char::isDigit) },
+                    label = { Text("رمز فعلی") },
+                    leadingIcon = { Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingIcon = {
+                        IconButton({ showCurrent = !showCurrent }) {
+                            Icon(if (showCurrent) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        }
+                    },
+                    visualTransformation = if (showCurrent) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true
+                )
+                OutlinedTextField(
+                    value = newPin, onValueChange = { newPin = it.filter(Char::isDigit) },
+                    label = { Text("رمز جدید") },
+                    leadingIcon = { Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingIcon = {
+                        IconButton({ showNew = !showNew }) {
+                            Icon(if (showNew) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        }
+                    },
+                    visualTransformation = if (showNew) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true
+                )
+                OutlinedTextField(
+                    value = confirmPin, onValueChange = { confirmPin = it.filter(Char::isDigit) },
+                    label = { Text("تکرار رمز جدید") },
+                    leadingIcon = { Icon(Icons.Default.LockReset, null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingIcon = {
+                        IconButton({ showConfirm = !showConfirm }) {
+                            Icon(if (showConfirm) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        }
+                    },
+                    visualTransformation = if (showConfirm) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(currentPin, newPin, confirmPin) },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("تغییر رمز", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("انصراف") } }
+    )
 }

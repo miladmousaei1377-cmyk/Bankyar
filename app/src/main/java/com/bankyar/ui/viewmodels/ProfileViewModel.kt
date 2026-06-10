@@ -23,5 +23,15 @@ class ProfileViewModel(app: Application) : AndroidViewModel(app) {
         _message.value = "اطلاعات با موفقیت ذخیره شد"
     }
 
+    fun changePin(user: User, currentPin: String, newPin: String, confirmPin: String) = viewModelScope.launch {
+        when {
+            currentPin != user.pin -> _message.value = "رمز فعلی اشتباه است"
+            newPin.length < 4 -> _message.value = "رمز جدید باید حداقل ۴ رقم باشد"
+            newPin != confirmPin -> _message.value = "تکرار رمز مطابقت ندارد"
+            newPin == currentPin -> _message.value = "رمز جدید با رمز فعلی یکسان است"
+            else -> { repo.update(user.copy(pin = newPin)); _message.value = "رمز با موفقیت تغییر یافت" }
+        }
+    }
+
     fun clearMessage() { _message.value = null }
 }

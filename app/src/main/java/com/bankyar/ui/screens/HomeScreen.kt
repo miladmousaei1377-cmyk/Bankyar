@@ -40,6 +40,7 @@ fun HomeScreen(
     onProfile: () -> Unit,
     onAccounts: () -> Unit,
     onReports: () -> Unit,
+    onBudget: () -> Unit,
     onAbout: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -92,6 +93,9 @@ fun HomeScreen(
                 }
                 DrawerItem(Icons.Default.BarChart, "گزارشات") {
                     scope.launch { drawerState.close() }; onReports()
+                }
+                DrawerItem(Icons.Default.Savings, "مدیریت بودجه") {
+                    scope.launch { drawerState.close() }; onBudget()
                 }
                 DrawerItem(Icons.Default.Info, "درباره ما") {
                     scope.launch { drawerState.close() }; onAbout()

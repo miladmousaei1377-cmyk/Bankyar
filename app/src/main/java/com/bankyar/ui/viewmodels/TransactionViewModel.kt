@@ -17,6 +17,8 @@ data class DashboardStats(
     val totalExpense: Double = 0.0
 )
 
+data class DateRange(val from: Long, val to: Long)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class TransactionViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = TransactionRepository(AppDatabase.getInstance(app).transactionDao())
@@ -24,17 +26,25 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
     private val _userId = MutableStateFlow(-1)
     private val _searchQuery = MutableStateFlow("")
     private val _message = MutableStateFlow<String?>(null)
+    private val _dateRange = MutableStateFlow<DateRange?>(null)
 
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     val message: StateFlow<String?> = _message.asStateFlow()
+    val dateRange: StateFlow<DateRange?> = _dateRange.asStateFlow()
 
-    val transactions: StateFlow<List<Transaction>> = combine(_userId, _searchQuery) { uid, q ->
-        uid to q
-    }.flatMapLatest { (uid, q) ->
-        if (uid < 0) flowOf(emptyList())
-        else if (q.isBlank()) repo.getAll(uid)
-        else repo.search(uid, q)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val transactions: StateFlow<List<Transaction>> = combine(
+        _userId, _searchQuery, _dateRange
+    ) { uid, q, dr -> Triple(uid, q, dr) }
+        .flatMapLatest { (uid, q, dr) ->
+            if (uid < 0) flowOf(emptyList())
+            else when {
+                dr != null && q.isBlank() -> repo.getByDateRange(uid, dr.from, dr.to)
+                dr != null -> repo.getByDateRange(uid, dr.from, dr.to)
+                    .map { list -> list.filter { it.title.contains(q, true) || it.description.contains(q, true) } }
+                q.isBlank() -> repo.getAll(uid)
+                else -> repo.search(uid, q)
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val recentTransactions: StateFlow<List<Transaction>> = _userId.flatMapLatest { uid ->
         if (uid < 0) flowOf(emptyList()) else repo.getRecent(uid)
@@ -53,8 +63,8 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardStats())
 
     fun setUser(userId: Int) { _userId.value = userId }
-
     fun setSearchQuery(q: String) { _searchQuery.value = q }
+    fun setDateRange(range: DateRange?) { _dateRange.value = range }
 
     fun addTransaction(t: Transaction) {
         viewModelScope.launch {
@@ -78,6 +88,5 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun getById(id: Int) = repo.getById(id)
-
     fun clearMessage() { _message.value = null }
 }

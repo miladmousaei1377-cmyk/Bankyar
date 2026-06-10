@@ -5,21 +5,24 @@ import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.bankyar.data.database.dao.BankAccountDao
+import com.bankyar.data.database.dao.BudgetDao
 import com.bankyar.data.database.dao.TransactionDao
 import com.bankyar.data.database.dao.UserDao
 import com.bankyar.data.database.entities.BankAccount
+import com.bankyar.data.database.entities.Budget
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.User
 
 @Database(
-    entities = [User::class, Transaction::class, BankAccount::class],
-    version = 2,
+    entities = [User::class, Transaction::class, BankAccount::class, Budget::class],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun transactionDao(): TransactionDao
     abstract fun bankAccountDao(): BankAccountDao
+    abstract fun budgetDao(): BudgetDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -40,10 +43,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS budgets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        category TEXT NOT NULL,
+                        limitAmount REAL NOT NULL,
+                        month INTEGER NOT NULL,
+                        year INTEGER NOT NULL
+                    )
+                """)
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "bankyar.db")
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { INSTANCE = it }
             }
     }
