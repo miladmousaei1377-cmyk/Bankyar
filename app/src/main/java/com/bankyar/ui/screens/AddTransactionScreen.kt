@@ -44,13 +44,21 @@ fun AddTransactionScreen(
     var type by remember { mutableStateOf(TransactionType.EXPENSE) }
     var category by remember { mutableStateOf(TransactionCategory.OTHER) }
     var description by remember { mutableStateOf("") }
-    var accountName by remember { mutableStateOf("حساب اصلی") }
+    var accountName by remember { mutableStateOf("") }
     var accountDropdownExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     var showJalaliPicker by remember { mutableStateOf(false) }
 
     val accounts by accountsViewModel.accounts.collectAsState()
+
+    LaunchedEffect(accounts) {
+        if (editId <= 0 && accountName.isEmpty()) {
+            accountName = accounts.firstOrNull { it.isDefault }?.title
+                ?: accounts.firstOrNull()?.title
+                ?: ""
+        }
+    }
 
     LaunchedEffect(existing) {
         existing?.let {
@@ -221,10 +229,6 @@ fun AddTransactionScreen(
                         expanded = accountDropdownExpanded,
                         onDismissRequest = { accountDropdownExpanded = false }
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("حساب اصلی") },
-                            onClick = { accountName = "حساب اصلی"; accountDropdownExpanded = false }
-                        )
                         accounts.forEach { acc ->
                             DropdownMenuItem(
                                 text = {
