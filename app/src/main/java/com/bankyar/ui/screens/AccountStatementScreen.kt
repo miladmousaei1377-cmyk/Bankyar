@@ -193,8 +193,8 @@ fun AccountStatementScreen(
                                     color = Color(0xFF2E7D32), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("هزینه", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                                Text("-${formatAmount(expense)} تومان",
+                                Text("هزینه+انتقال", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                Text("-${formatAmount(expense + transfer)} تومان",
                                     color = Color(0xFFC62828), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                         }
