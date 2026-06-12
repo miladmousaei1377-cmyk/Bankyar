@@ -42,7 +42,7 @@ fun LockScreen(
     val scope = rememberCoroutineScope()
 
     val biometricAvailable = remember { BiometricHelper.canAuthenticate(context) }
-    val showBiometric = biometricAvailable  // always offer fingerprint if device supports it
+    val showBiometric = biometricAvailable && biometricEnabled
 
     var showPinForm by remember { mutableStateOf(!showBiometric) }
     var pin by remember { mutableStateOf("") }

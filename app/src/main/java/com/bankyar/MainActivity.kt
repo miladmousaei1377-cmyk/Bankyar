@@ -12,15 +12,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.work.*
 import com.bankyar.navigation.BankYarNavGraph
 import com.bankyar.ui.theme.BankYarTheme
 import com.bankyar.ui.viewmodels.ThemeViewModel
+import com.bankyar.util.BackupWorker
 import com.bankyar.util.NotificationHelper
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
+    private fun scheduleDefaultAutoBackup() {
+        val request = PeriodicWorkRequestBuilder<BackupWorker>(30, TimeUnit.MINUTES)
+            .setConstraints(Constraints.NONE)
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            BackupWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.createChannel(this)
+        scheduleDefaultAutoBackup()
         enableEdgeToEdge()
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
