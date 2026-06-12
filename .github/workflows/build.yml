@@ -61,14 +61,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get version name
+        id: version
+        run: echo "name=$(grep versionName app/build.gradle.kts | grep -oP '\"[^\"]+\"' | tr -d '\"')" >> $GITHUB_OUTPUT
+
       - name: Publish latest release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "آخرین نسخه بانک‌یار"
+          name: "بانک‌یار نسخه ${{ steps.version.outputs.name }}"
           body: |
             آخرین نسخه بانک‌یار — نصب مستقیم روی اندروید
 
+            **نسخه:** `${{ steps.version.outputs.name }}`
             **کامیت:** `${{ github.sha }}`
             **شاخه:** `${{ github.ref_name }}`
           files: app/build/outputs/apk/release/app-release.apk
