@@ -79,8 +79,9 @@ fun ReportsScreen(
             val list = filteredTx()
             val inc = list.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
             val exp = list.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            val tr = list.filter { t -> t.type == TransactionType.TRANSFER }.sumOf { it.amount }
             context.contentResolver.openOutputStream(it)?.use { stream ->
-                stream.write(buildTxt(list, inc - exp, inc, exp).toByteArray(Charsets.UTF_8))
+                stream.write(buildTxt(list, inc - exp - tr, inc, exp).toByteArray(Charsets.UTF_8))
             }
         }
     }
@@ -92,8 +93,9 @@ fun ReportsScreen(
             val list = filteredTx()
             val inc = list.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
             val exp = list.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            val tr = list.filter { t -> t.type == TransactionType.TRANSFER }.sumOf { it.amount }
             context.contentResolver.openOutputStream(it)?.use { stream ->
-                val pdf = buildPdf(list, inc - exp, inc, exp)
+                val pdf = buildPdf(list, inc - exp - tr, inc, exp)
                 pdf.writeTo(stream)
                 pdf.close()
             }
@@ -316,7 +318,8 @@ private fun buildMonthlyData(transactions: List<Transaction>): List<MonthlyData>
         .map { (month, txList) ->
             val income = txList.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
             val expense = txList.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
-            MonthlyData(month, income, expense, income - expense)
+            val transfer = txList.filter { it.type == TransactionType.TRANSFER }.sumOf { it.amount }
+            MonthlyData(month, income, expense, income - expense - transfer)
         }
 }
 

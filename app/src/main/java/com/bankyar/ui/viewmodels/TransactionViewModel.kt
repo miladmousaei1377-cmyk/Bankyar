@@ -68,10 +68,11 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
         if (uid < 0) flowOf(DashboardStats())
         else combine(
             repo.sumByType(uid, TransactionType.INCOME),
-            repo.sumByType(uid, TransactionType.EXPENSE)
-        ) { inc, exp ->
-            val income = inc ?: 0.0; val expense = exp ?: 0.0
-            DashboardStats(income - expense, income, expense)
+            repo.sumByType(uid, TransactionType.EXPENSE),
+            repo.sumByType(uid, TransactionType.TRANSFER)
+        ) { inc, exp, tr ->
+            val income = inc ?: 0.0; val expense = exp ?: 0.0; val transfer = tr ?: 0.0
+            DashboardStats(income - expense - transfer, income, expense)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardStats())
 
