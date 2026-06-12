@@ -38,9 +38,12 @@ die () {
     exit 1
 }
 
-OS="`uname`"
-case "$OS" in
-  Cygwin* ) cygwin=true;;
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "`uname`" in
+  CYGWIN* ) cygwin=true;;
   MSYS* | MINGW* ) msys=true;;
   Darwin* ) darwin=true;;
   NONSTOP* ) nonstop=true;;
