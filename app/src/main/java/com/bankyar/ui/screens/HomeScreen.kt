@@ -42,6 +42,7 @@ fun HomeScreen(
     onReports: () -> Unit,
     onBudget: () -> Unit,
     onAbout: () -> Unit,
+    onSettings: () -> Unit,
     onLogout: () -> Unit
 ) {
     LaunchedEffect(userId) { viewModel.setUser(userId) }
@@ -103,6 +104,9 @@ fun HomeScreen(
                 }
                 DrawerItem(Icons.Default.Info, "درباره ما") {
                     scope.launch { drawerState.close() }; onAbout()
+                }
+                DrawerItem(Icons.Default.Settings, "تنظیمات") {
+                    scope.launch { drawerState.close() }; onSettings()
                 }
 
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

@@ -1,6 +1,5 @@
 package com.bankyar.ui.screens
 
-import androidx.biometric.BiometricManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -14,15 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.ProfileViewModel
 import com.bankyar.ui.viewmodels.SettingsViewModel
 
@@ -36,17 +32,7 @@ fun ProfileScreen(
 ) {
     val user by viewModel.getUser(userId).collectAsState(initial = null)
     val message by viewModel.message.collectAsState()
-    val backupMessage by settingsViewModel.backupMessage.collectAsState()
-    val isFingerprintEnabled by settingsViewModel.isFingerprintEnabled.collectAsState()
-    val isAutoBackupEnabled by settingsViewModel.isAutoBackupEnabled.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-
-    val hasBiometricHardware = remember {
-        BiometricManager.from(context)
-            .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-            .let { it == BiometricManager.BIOMETRIC_SUCCESS || it == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED }
-    }
 
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
@@ -62,12 +48,6 @@ fun ProfileScreen(
             viewModel.clearMessage()
             editMode = false
             showPinDialog = false
-        }
-    }
-    LaunchedEffect(backupMessage) {
-        backupMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            settingsViewModel.clearBackupMessage()
         }
     }
 
@@ -210,173 +190,39 @@ fun ProfileScreen(
                 }
             }
 
-            // Security settings card
+            // Change PIN card
             Card(
                 Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "امنیت", fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    // Change PIN
-                    SettingsRow(
-                        icon = Icons.Default.Lock,
-                        title = "تغییر رمز عبور",
-                        subtitle = "رمز PIN ورود به برنامه",
-                        onClick = { showPinDialog = true }
-                    )
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(0.2f)
-                    )
-
-                    // Fingerprint toggle
-                    if (hasBiometricHardware) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Icon(
-                                    Icons.Default.Fingerprint, null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        "ورود با اثر انگشت",
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        if (isFingerprintEnabled) "فعال است" else "غیرفعال است",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = isFingerprintEnabled,
-                                onCheckedChange = { settingsViewModel.setFingerprintEnabled(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary
-                                )
+                Row(
+                    Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "تغییر رمز عبور", fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "رمز PIN ورود به برنامه",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
                             )
                         }
                     }
+                    OutlinedButton(
+                        onClick = { showPinDialog = true },
+                        shape = RoundedCornerShape(10.dp)
+                    ) { Text("تغییر") }
                 }
             }
-
-            // Backup settings card
-            Card(
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "پشتیبان‌گیری", fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    // Auto-backup toggle
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Icon(
-                                Icons.Default.Backup, null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    "پشتیبان‌گیری خودکار",
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 14.sp
-                                )
-                                Text(
-                                    "روزانه یک بار بصورت خودکار",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = isAutoBackupEnabled,
-                            onCheckedChange = { settingsViewModel.setAutoBackupEnabled(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(0.2f)
-                    )
-
-                    // Manual backup button
-                    SettingsRow(
-                        icon = Icons.Default.CloudUpload,
-                        title = "پشتیبان‌گیری فوری",
-                        subtitle = "ذخیره اطلاعات در حافظه دستگاه",
-                        onClick = { settingsViewModel.performManualBackup(userId) }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
         }
-    }
-}
-
-@Composable
-private fun SettingsRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(title, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
-                Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-            }
-        }
-        Icon(
-            Icons.Default.ChevronLeft, null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
     }
 }
 

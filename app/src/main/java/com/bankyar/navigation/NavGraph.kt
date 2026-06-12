@@ -47,6 +47,7 @@ sealed class Screen(val route: String) {
     object Reports : Screen("reports")
     object Budget : Screen("budget")
     object About : Screen("about")
+    object Settings : Screen("settings")
 }
 
 @Composable
@@ -88,11 +89,16 @@ fun BankYarNavGraph() {
     NavHost(navController = navController, startDestination = Screen.Splash.route) {
 
         composable(Screen.Splash.route) {
-            // Wait for both auth state and settings to be loaded before navigating
-            LaunchedEffect(loggedInUserId, isSettingsLoaded) {
+            // Guard against double-navigation (e.g. if isFingerprintEnabled updates after first run)
+            var navigated by remember { mutableStateOf(false) }
+
+            // All three keys needed: fingerprint value must also be loaded before deciding route
+            LaunchedEffect(loggedInUserId, isSettingsLoaded, isFingerprintEnabled) {
+                if (navigated) return@LaunchedEffect
                 if (loggedInUserId == -2) return@LaunchedEffect  // Auth not loaded yet
                 if (!isSettingsLoaded) return@LaunchedEffect      // Settings not loaded yet
 
+                navigated = true
                 val dest = when {
                     loggedInUserId > 0 && isFingerprintEnabled -> Screen.BiometricLock.route
                     loggedInUserId > 0 -> Screen.Home.route
@@ -144,6 +150,7 @@ fun BankYarNavGraph() {
                     onReports = { navController.navigate(Screen.Reports.route) },
                     onBudget = { navController.navigate(Screen.Budget.route) },
                     onAbout = { navController.navigate(Screen.About.route) },
+                    onSettings = { navController.navigate(Screen.Settings.route) },
                     onLogout = {
                         authViewModel.logout()
                         navController.navigate(Screen.Auth.route) {
@@ -229,6 +236,14 @@ fun BankYarNavGraph() {
 
         composable(Screen.About.route) {
             AboutScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                userId = loggedInUserId,
+                viewModel = settingsViewModel,
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }
