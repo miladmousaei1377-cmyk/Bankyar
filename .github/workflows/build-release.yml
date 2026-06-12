@@ -25,39 +25,29 @@ jobs:
           cache: gradle
 
       - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Generate keystore (if not provided via secrets)
         run: |
-          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            keytool -genkey -v \
-              -keystore bankyar-release.jks \
-              -alias bankyar \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass bankyar123 \
-              -keypass bankyar123 \
-              -dname "CN=BankYar, OU=Dev, O=BankYar, L=Tehran, S=Tehran, C=IR"
-            echo "KEYSTORE_FILE=bankyar-release.jks" >> $GITHUB_ENV
-            echo "KEY_ALIAS=bankyar" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=bankyar123" >> $GITHUB_ENV
-            echo "STORE_PASSWORD=bankyar123" >> $GITHUB_ENV
-          else
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bankyar-release.jks
-            echo "KEYSTORE_FILE=bankyar-release.jks" >> $GITHUB_ENV
-            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-            echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
-          fi
+          sed -i 's/\r//' gradlew
+          chmod +x gradlew
+
+      - name: Generate keystore
+        run: |
+          keytool -genkey -v \
+            -keystore bankyar-release.jks \
+            -alias bankyar \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass bankyar123 \
+            -keypass bankyar123 \
+            -dname "CN=BankYar, OU=Dev, O=BankYar, L=Tehran, S=Tehran, C=IR"
 
       - name: Build Release APK
         run: |
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file=$(pwd)/bankyar-release.jks \
-            -Pandroid.injected.signing.store.password=${{ env.STORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ env.KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ env.KEY_PASSWORD }}
+            -Pandroid.injected.signing.store.password=bankyar123 \
+            -Pandroid.injected.signing.key.alias=bankyar \
+            -Pandroid.injected.signing.key.password=bankyar123
 
       - name: Rename APK
         run: |
