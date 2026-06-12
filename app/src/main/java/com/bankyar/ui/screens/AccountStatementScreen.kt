@@ -55,8 +55,9 @@ fun AccountStatementScreen(
     }
     val income = remember(accountTx) { accountTx.filter { it.type == TransactionType.INCOME }.sumOf { it.amount } }
     val expense = remember(accountTx) { accountTx.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount } }
+    val transfer = remember(accountTx) { accountTx.filter { it.type == TransactionType.TRANSFER }.sumOf { it.amount } }
     val initialBalance = account?.initialBalance ?: 0.0
-    val currentBalance = initialBalance + income - expense
+    val currentBalance = initialBalance + income - expense - transfer
     val isPositive = currentBalance >= 0
 
     val displayedTx = remember(accountTx, selectedFilter) {
@@ -83,8 +84,9 @@ fun AccountStatementScreen(
         uri?.let {
             val inc = displayedTx.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
             val exp = displayedTx.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            val tr = displayedTx.filter { t -> t.type == TransactionType.TRANSFER }.sumOf { it.amount }
             context.contentResolver.openOutputStream(it)?.use { stream ->
-                stream.write(buildTxt(displayedTx, inc - exp, inc, exp).toByteArray(Charsets.UTF_8))
+                stream.write(buildTxt(displayedTx, inc - exp - tr, inc, exp).toByteArray(Charsets.UTF_8))
             }
         }
     }
@@ -94,8 +96,9 @@ fun AccountStatementScreen(
         uri?.let {
             val inc = displayedTx.filter { t -> t.type == TransactionType.INCOME }.sumOf { it.amount }
             val exp = displayedTx.filter { t -> t.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            val tr = displayedTx.filter { t -> t.type == TransactionType.TRANSFER }.sumOf { it.amount }
             context.contentResolver.openOutputStream(it)?.use { stream ->
-                val pdf: PdfDocument = buildPdf(displayedTx, inc - exp, inc, exp)
+                val pdf: PdfDocument = buildPdf(displayedTx, inc - exp - tr, inc, exp)
                 pdf.writeTo(stream); pdf.close()
             }
         }
