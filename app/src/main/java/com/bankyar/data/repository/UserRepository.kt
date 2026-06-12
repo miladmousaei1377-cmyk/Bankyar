@@ -9,4 +9,5 @@ class UserRepository(private val dao: UserDao) {
     suspend fun findByPhone(phone: String): User? = dao.findByPhone(phone)
     fun getUserById(id: Int) = dao.getUserById(id)
     suspend fun update(user: User) = dao.update(user)
+    suspend fun verifyPin(userId: Int, pin: String): User? = dao.verifyPin(userId, pin)
 }

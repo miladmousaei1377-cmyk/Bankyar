@@ -9,6 +9,8 @@ import com.bankyar.data.database.entities.User
 import com.bankyar.data.repository.UserRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 data class AuthState(
     val isLoading: Boolean = false,
@@ -23,8 +25,9 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(AuthState())
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
+    // -2 = loading (DataStore not yet read), -1 = not logged in, >0 = logged in user ID
     val loggedInUserId: StateFlow<Int> = prefs.loggedInUserId
-        .stateIn(viewModelScope, SharingStarted.Eagerly, -1)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, -2)
 
     fun register(name: String, phone: String, pin: String) {
         if (name.isBlank() || phone.isBlank() || pin.isBlank()) {
@@ -75,5 +78,14 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearError() {
         _state.value = _state.value.copy(error = null)
+    }
+
+    fun verifyPin(userId: Int, pin: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val user = repo.verifyPin(userId, pin)
+            withContext(Dispatchers.Main) {
+                onResult(user != null)
+            }
+        }
     }
 }

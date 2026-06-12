@@ -33,4 +33,7 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: Int): Transaction?
+
+    @Query("SELECT * FROM transactions WHERE userId = :userId ORDER BY date DESC")
+    suspend fun getAllByUserSync(userId: Int): List<Transaction>
 }

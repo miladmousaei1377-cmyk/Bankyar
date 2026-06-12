@@ -20,4 +20,7 @@ interface UserDao {
 
     @Update
     suspend fun update(user: User)
+
+    @Query("SELECT * FROM users WHERE id = :userId AND pin = :pin LIMIT 1")
+    suspend fun verifyPin(userId: Int, pin: String): User?
 }

@@ -59,10 +59,14 @@ fun HomeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        scrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f),
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.width(300.dp)
+                drawerContentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .width(300.dp)
+                    .fillMaxHeight()
             ) {
                 // Header
                 Box(

@@ -1,6 +1,22 @@
 package com.bankyar.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
@@ -10,10 +26,14 @@ import com.bankyar.data.repository.UserRepository
 import com.bankyar.ui.screens.*
 import com.bankyar.ui.viewmodels.*
 import androidx.compose.ui.platform.LocalContext
+import com.bankyar.ui.theme.GradientEnd
+import com.bankyar.ui.theme.GradientStart
 import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
     object Auth : Screen("auth")
+    object BiometricLock : Screen("biometric_lock")
     object Home : Screen("home")
     object Transactions : Screen("transactions")
     object AddTransaction : Screen("add?editId={editId}") {
@@ -38,9 +58,13 @@ fun BankYarNavGraph() {
     val profileViewModel: ProfileViewModel = viewModel()
     val themeViewModel: ThemeViewModel = viewModel()
     val budgetViewModel: BudgetViewModel = viewModel()
+    val settingsViewModel: SettingsViewModel = viewModel()
 
+    // -2 = loading, -1 = not logged in, >0 = logged in user ID
     val loggedInUserId by authViewModel.loggedInUserId.collectAsState()
     val isDarkMode by themeViewModel.isDarkMode.collectAsState()
+    val isFingerprintEnabled by settingsViewModel.isFingerprintEnabled.collectAsState()
+    val isSettingsLoaded by settingsViewModel.isLoaded.collectAsState()
     val context = LocalContext.current
     var userName by remember { mutableStateOf("کاربر") }
     val scope = rememberCoroutineScope()
@@ -54,9 +78,32 @@ fun BankYarNavGraph() {
         }
     }
 
-    val startDest = if (loggedInUserId > 0) Screen.Home.route else Screen.Auth.route
+    // Trigger auto-backup after login
+    LaunchedEffect(loggedInUserId) {
+        if (loggedInUserId > 0) {
+            settingsViewModel.checkAndAutoBackup(loggedInUserId)
+        }
+    }
 
-    NavHost(navController = navController, startDestination = startDest) {
+    NavHost(navController = navController, startDestination = Screen.Splash.route) {
+
+        composable(Screen.Splash.route) {
+            // Wait for both auth state and settings to be loaded before navigating
+            LaunchedEffect(loggedInUserId, isSettingsLoaded) {
+                if (loggedInUserId == -2) return@LaunchedEffect  // Auth not loaded yet
+                if (!isSettingsLoaded) return@LaunchedEffect      // Settings not loaded yet
+
+                val dest = when {
+                    loggedInUserId > 0 && isFingerprintEnabled -> Screen.BiometricLock.route
+                    loggedInUserId > 0 -> Screen.Home.route
+                    else -> Screen.Auth.route
+                }
+                navController.navigate(dest) {
+                    popUpTo(Screen.Splash.route) { inclusive = true }
+                }
+            }
+            SplashScreen()
+        }
 
         composable(Screen.Auth.route) {
             AuthScreen(authViewModel) {
@@ -66,10 +113,25 @@ fun BankYarNavGraph() {
             }
         }
 
+        composable(Screen.BiometricLock.route) {
+            BiometricLockScreen(
+                userId = loggedInUserId,
+                onUnlocked = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.BiometricLock.route) { inclusive = true }
+                    }
+                },
+                onVerifyPin = { pin, callback ->
+                    authViewModel.verifyPin(loggedInUserId, pin, callback)
+                }
+            )
+        }
+
         composable(Screen.Home.route) {
-            if (loggedInUserId > 0) {
+            val userId = loggedInUserId
+            if (userId > 0) {
                 HomeScreen(
-                    userId = loggedInUserId,
+                    userId = userId,
                     userName = userName,
                     isDarkMode = isDarkMode,
                     viewModel = transactionViewModel,
@@ -89,6 +151,12 @@ fun BankYarNavGraph() {
                         }
                     }
                 )
+            } else if (userId == -1) {
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                }
             }
         }
 
@@ -130,6 +198,7 @@ fun BankYarNavGraph() {
             ProfileScreen(
                 userId = loggedInUserId,
                 viewModel = profileViewModel,
+                settingsViewModel = settingsViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -160,6 +229,33 @@ fun BankYarNavGraph() {
 
         composable(Screen.About.route) {
             AboutScreen(onBack = { navController.popBackStack() })
+        }
+    }
+}
+
+@Composable
+private fun SplashScreen() {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(GradientStart, GradientEnd, Color(0xFF0A2472)))),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier
+                    .size(90.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color.White.copy(0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.AccountBalance, null, tint = Color.White, modifier = Modifier.size(50.dp))
+            }
+            Spacer(Modifier.height(20.dp))
+            Text("بانک‌یار", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("مدیریت هوشمند مالی", fontSize = 14.sp, color = Color.White.copy(0.7f))
+            Spacer(Modifier.height(40.dp))
+            CircularProgressIndicator(color = Color.White.copy(0.8f), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
         }
     }
 }
