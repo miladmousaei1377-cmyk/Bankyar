@@ -1,0 +1,94 @@
+name: Build Release APK
+
+on:
+  push:
+    branches:
+      - claude/app-bugs-fingerprint-fj9cnv
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Signed Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Generate keystore (if not provided via secrets)
+        run: |
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            keytool -genkey -v \
+              -keystore bankyar-release.jks \
+              -alias bankyar \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass bankyar123 \
+              -keypass bankyar123 \
+              -dname "CN=BankYar, OU=Dev, O=BankYar, L=Tehran, S=Tehran, C=IR"
+            echo "KEYSTORE_FILE=bankyar-release.jks" >> $GITHUB_ENV
+            echo "KEY_ALIAS=bankyar" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=bankyar123" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=bankyar123" >> $GITHUB_ENV
+          else
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bankyar-release.jks
+            echo "KEYSTORE_FILE=bankyar-release.jks" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
+          fi
+
+      - name: Build Release APK
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$(pwd)/bankyar-release.jks \
+            -Pandroid.injected.signing.store.password=${{ env.STORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ env.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ env.KEY_PASSWORD }}
+
+      - name: Rename APK
+        run: |
+          VERSION=$(grep -m1 "versionName" app/build.gradle.kts | grep -oP '"\K[^"]+')
+          cp app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/bankyar-v${VERSION}-release.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bankyar-release-apk
+          path: app/build/outputs/apk/release/bankyar-*.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: "بانک‌یار v${{ github.run_number }}"
+          body: |
+            ## نسخه جدید بانک‌یار
+
+            ### تغییرات این نسخه:
+            - رفع باگ اثر انگشت (وقتی غیرفعال است دیگر نمایش داده نمی‌شود)
+            - رفع باگ سفید شدن منو
+            - پشتیبان‌گیری خودکار پیش‌فرض فعال (هر ۳۰ دقیقه)
+            - صفحه تنظیمات جداگانه
+            - صفحه Splash برای بارگذاری صحیح
+          files: app/build/outputs/apk/release/bankyar-*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
