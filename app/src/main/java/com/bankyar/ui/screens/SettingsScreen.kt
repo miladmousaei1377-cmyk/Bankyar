@@ -1,12 +1,8 @@
 package com.bankyar.ui.screens
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.os.Environment
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -108,20 +104,6 @@ fun SettingsScreen(
             },
             onDismiss = { showTimePicker = false }
         )
-    }
-
-    val storagePermLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-            Environment.isExternalStorageManager() else true
-        if (hasPermission) {
-            autoBackupEnabled = true
-            scheduleAutoBackup(context)
-            scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
-        } else {
-            scope.launch { snackbarHostState.showSnackbar("دسترسی به حافظه داده نشد؛ پشتیبان‌گیری فعال نشد") }
-        }
     }
 
     LaunchedEffect(Unit) {
@@ -365,19 +347,9 @@ fun SettingsScreen(
                             checked = autoBackupEnabled,
                             onCheckedChange = { enabled ->
                                 if (enabled) {
-                                    val needsPerm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-                                            !Environment.isExternalStorageManager()
-                                    if (needsPerm) {
-                                        val intent = Intent(
-                                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                                            Uri.parse("package:${context.packageName}")
-                                        )
-                                        storagePermLauncher.launch(intent)
-                                    } else {
-                                        autoBackupEnabled = true
-                                        scheduleAutoBackup(context)
-                                        scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
-                                    }
+                                    autoBackupEnabled = true
+                                    scheduleAutoBackup(context)
+                                    scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
                                 } else {
                                     autoBackupEnabled = false
                                     cancelAutoBackup(context)
@@ -398,7 +370,7 @@ fun SettingsScreen(
                         }
                     }
                     Text(
-                        "مسیر: حافظه اصلی / bankyar / auto_backup.json",
+                        "مسیر: Android/data/com.bankyar/files/bankyar/auto_backup.json",
                         color = MaterialTheme.colorScheme.outline,
                         fontSize = 10.sp
                     )

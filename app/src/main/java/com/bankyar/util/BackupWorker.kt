@@ -1,7 +1,6 @@
 package com.bankyar.util
 
 import android.content.Context
-import android.os.Environment
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.bankyar.data.PreferencesManager
@@ -33,7 +32,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         const val WORK_NAME = "bankyar_auto_backup"
 
         fun getAutoBackupFile(context: Context): File {
-            val dir = File(Environment.getExternalStorageDirectory(), BACKUP_DIR)
+            val dir = File(context.getExternalFilesDir(null), BACKUP_DIR)
             dir.mkdirs()
             return File(dir, AUTO_BACKUP_FILE_NAME)
         }

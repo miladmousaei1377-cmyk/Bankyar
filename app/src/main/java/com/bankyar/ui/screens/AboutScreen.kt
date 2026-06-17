@@ -65,7 +65,7 @@ fun AboutScreen(onBack: () -> Unit) {
 
             Text("بانک‌یار", fontSize = 26.sp, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground)
-            Text("نسخه ۱.۲", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            Text("نسخه ۱.۳", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
 
             // Description card
             AboutCard(title = "درباره نرم‌افزار") {
@@ -83,7 +83,7 @@ fun AboutScreen(onBack: () -> Unit) {
             // Tech info card
             AboutCard(title = "اطلاعات فنی") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AboutRow(Icons.Default.Code, "نسخه نرم‌افزار", "۱.۲")
+                    AboutRow(Icons.Default.Code, "نسخه نرم‌افزار", "۱.۳")
                     AboutRow(Icons.Default.Person, "توسعه‌دهنده", "میلاد موسایی")
                     Row(
                         Modifier.clickable {
