@@ -84,6 +84,7 @@ fun SettingsScreen(
         if (granted) {
             autoBackupEnabled = true
             scheduleAutoBackup(context)
+            runImmediateBackup(context)
             scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
         } else {
             scope.launch { snackbarHostState.showSnackbar("دسترسی به حافظه داده نشد") }
@@ -368,7 +369,8 @@ fun SettingsScreen(
                                     } else {
                                         autoBackupEnabled = true
                                         scheduleAutoBackup(context)
-                                        scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
+                                        runImmediateBackup(context)
+                                        scope.launch { snackbarHostState.showSnackbar("در حال ایجاد نسخه پشتیبان...") }
                                     }
                                 } else {
                                     autoBackupEnabled = false
@@ -390,9 +392,10 @@ fun SettingsScreen(
                         }
                     }
                     Text(
-                        "مسیر: Downloads/Bankyar/auto_backup.json",
+                        "مسیر اصلی: Downloads/Bankyar/auto_backup.json\nمسیر پشتیبان: Android/data/com.bankyar/files/Bankyar/auto_backup.json",
                         color = MaterialTheme.colorScheme.outline,
-                        fontSize = 10.sp
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp
                     )
                 }
             }
@@ -558,4 +561,10 @@ private fun ReminderTimePickerDialog(
 
 private fun cancelAutoBackup(context: android.content.Context) {
     WorkManager.getInstance(context).cancelUniqueWork(BackupWorker.WORK_NAME)
+}
+
+private fun runImmediateBackup(context: android.content.Context) {
+    WorkManager.getInstance(context).enqueue(
+        OneTimeWorkRequestBuilder<BackupWorker>().build()
+    )
 }

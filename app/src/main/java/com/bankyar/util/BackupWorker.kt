@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 
 class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -38,11 +39,17 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         const val WORK_NAME = "bankyar_auto_backup"
 
         fun writeBackupFile(context: Context, json: String) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                writeViaMediaStore(context, json)
+            val written = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                runCatching { writeViaMediaStore(context, json) }.isSuccess
             } else {
-                writeViaLegacyFile(json)
+                runCatching { writeViaLegacyFile(json) }.isSuccess
             }
+            // Always write to app-specific storage as reliable fallback
+            if (!written) {
+                writeViaAppFiles(context, json)
+            }
+            // Also keep an app-specific copy as reliable fallback regardless
+            runCatching { writeViaAppFiles(context, json) }
         }
 
         @RequiresApi(Build.VERSION_CODES.Q)
@@ -59,8 +66,10 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 put(MediaStore.Downloads.MIME_TYPE, "application/json")
                 put(MediaStore.Downloads.RELATIVE_PATH, relPath)
             }
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
+                ?: throw IOException("MediaStore insert returned null")
             resolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                ?: throw IOException("openOutputStream returned null for $uri")
         }
 
         private fun writeViaLegacyFile(json: String) {
@@ -69,6 +78,12 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
                 BACKUP_FOLDER
             )
+            if (!dir.exists() && !dir.mkdirs()) throw IOException("Cannot create dir: $dir")
+            File(dir, AUTO_BACKUP_FILE_NAME).writeText(json)
+        }
+
+        private fun writeViaAppFiles(context: Context, json: String) {
+            val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, BACKUP_FOLDER)
             dir.mkdirs()
             File(dir, AUTO_BACKUP_FILE_NAME).writeText(json)
         }
