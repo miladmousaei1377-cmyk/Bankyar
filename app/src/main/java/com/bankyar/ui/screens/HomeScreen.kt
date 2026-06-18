@@ -1,6 +1,8 @@
 package com.bankyar.ui.screens
 
 import android.app.Activity
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
@@ -17,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -67,6 +70,7 @@ fun HomeScreen(
     val recent by viewModel.recentTransactions.collectAsState()
     val message by viewModel.message.collectAsState()
     val accounts by accountsViewModel.accounts.collectAsState()
+    val accountColorMap = remember(accounts) { accounts.associate { it.title to it.cardColor } }
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -410,14 +414,22 @@ fun HomeScreen(
                                     }
                                 )
                                 Box(Modifier.weight(1f)) {
-                                    TransactionItem(t, onClick = {
-                                        selectedIds = if (selectedIds.contains(t.id))
-                                            selectedIds - t.id else selectedIds + t.id
-                                    })
+                                    TransactionItem(
+                                        t = t,
+                                        accountColor = parseCardColor(accountColorMap[t.accountName]),
+                                        onClick = {
+                                            selectedIds = if (selectedIds.contains(t.id))
+                                                selectedIds - t.id else selectedIds + t.id
+                                        }
+                                    )
                                 }
                             }
                         } else {
-                            TransactionItem(t, onClick = { onTransactionClick(t.id) })
+                            TransactionItem(
+                                t = t,
+                                accountColor = parseCardColor(accountColorMap[t.accountName]),
+                                onClick = { onTransactionClick(t.id) }
+                            )
                         }
                     }
                 }
@@ -426,16 +438,94 @@ fun HomeScreen(
     }
 }
 
+private val CARD_PRESET_COLORS = listOf(
+    "" to "پیش‌فرض",
+    "#1565C0" to "آبی",
+    "#1B5E20" to "سبز",
+    "#6A1B9A" to "بنفش",
+    "#B71C1C" to "قرمز",
+    "#E65100" to "نارنجی",
+    "#006064" to "فیروزه‌ای",
+    "#37474F" to "خاکستری",
+    "#4E342E" to "قهوه‌ای",
+    "#880E4F" to "صورتی"
+)
+
+internal fun parseCardColor(hex: String?): Color? {
+    if (hex.isNullOrBlank()) return null
+    return try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { null }
+}
+
 @Composable
 private fun AccountBalanceCard(acc: BankAccount, userId: Int, accountsViewModel: AccountsViewModel) {
     val netBalance by accountsViewModel.getNetBalance(userId, acc.title).collectAsState(initial = 0.0)
     val currentBalance = acc.initialBalance + netBalance
     val isPositive = currentBalance >= 0
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val cardBgColor = remember(acc.cardColor) { parseCardColor(acc.cardColor) } ?: primaryColor
+
+    var showColorPicker by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var refreshTarget by remember { mutableFloatStateOf(0f) }
+    val refreshRotation by animateFloatAsState(
+        targetValue = refreshTarget,
+        animationSpec = tween(500),
+        label = "refresh",
+        finishedListener = { isRefreshing = false }
+    )
+
+    if (showColorPicker) {
+        AlertDialog(
+            onDismissRequest = { showColorPicker = false },
+            title = { Text("رنگ کارت", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("رنگ پس‌زمینه کارت را انتخاب کنید:",
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(14.dp))
+                    CARD_PRESET_COLORS.chunked(5).forEach { row ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            row.forEach { (hex, name) ->
+                                val swatch = if (hex.isBlank()) primaryColor
+                                    else try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { primaryColor }
+                                val isSelected = acc.cardColor == hex
+                                Box(
+                                    Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(swatch)
+                                        .then(if (isSelected) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
+                                        .clickable {
+                                            accountsViewModel.updateAccount(acc.copy(cardColor = hex))
+                                            showColorPicker = false
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (hex.isBlank()) Icon(Icons.Default.Palette, contentDescription = name,
+                                        tint = Color.White, modifier = Modifier.size(22.dp))
+                                    else if (isSelected) Icon(Icons.Default.Check, contentDescription = null,
+                                        tint = Color.White, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showColorPicker = false }) { Text("بستن") }
+            }
+        )
+    }
+
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+        colors = CardDefaults.cardColors(containerColor = cardBgColor),
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -449,13 +539,37 @@ private fun AccountBalanceCard(acc: BankAccount, userId: Int, accountsViewModel:
                         tint = Color.White.copy(0.9f), modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(acc.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    if (acc.isDefault) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier.clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(0.2f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) { Text("پیش‌فرض", color = Color.White, fontSize = 10.sp) }
+                    }
                 }
-                if (acc.isDefault) {
-                    Box(
-                        Modifier.clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(0.2f))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) { Text("پیش‌فرض", color = Color.White, fontSize = 10.sp) }
+                Row {
+                    IconButton(
+                        onClick = {
+                            if (!isRefreshing) {
+                                isRefreshing = true
+                                refreshTarget += 360f
+                            }
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "بروزرسانی",
+                            modifier = Modifier.size(18.dp).rotate(refreshRotation),
+                            tint = Color.White.copy(0.8f))
+                    }
+                    IconButton(
+                        onClick = { showColorPicker = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Palette, contentDescription = "تغییر رنگ",
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White.copy(0.8f))
+                    }
                 }
             }
 
@@ -509,7 +623,7 @@ private fun DrawerItem(
 }
 
 @Composable
-fun TransactionItem(t: Transaction, onClick: () -> Unit) {
+fun TransactionItem(t: Transaction, accountColor: Color? = null, onClick: () -> Unit) {
     val (bg, fg) = when (t.type) {
         TransactionType.INCOME -> MaterialTheme.colorScheme.surface to Color(0xFF2E7D32)
         TransactionType.EXPENSE -> MaterialTheme.colorScheme.surface to Color(0xFFC62828)
@@ -538,7 +652,13 @@ fun TransactionItem(t: Transaction, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(t.title, fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
-                Text(t.category.label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t.category.label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    if (accountColor != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(accountColor))
+                    }
+                }
                 if (t.description.isNotBlank())
                     Text(t.description, color = MaterialTheme.colorScheme.outline, fontSize = 11.sp, maxLines = 1)
             }

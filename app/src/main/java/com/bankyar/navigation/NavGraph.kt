@@ -175,6 +175,7 @@ fun BankYarNavGraph() {
         composable(Screen.Transactions.route) {
             TransactionsScreen(
                 viewModel = transactionViewModel,
+                accountsViewModel = accountsViewModel,
                 onBack = { navController.popBackStack() },
                 onAddTransaction = { navController.navigate(Screen.AddTransaction.route()) },
                 onTransactionClick = { navController.navigate(Screen.TransactionDetail.route(it)) }

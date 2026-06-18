@@ -12,5 +12,6 @@ data class BankAccount(
     val accountNumber: String = "",
     val cardNumber: String = "",
     val isDefault: Boolean = false,
-    val initialBalance: Double = 0.0
+    val initialBalance: Double = 0.0,
+    val cardColor: String = ""
 )

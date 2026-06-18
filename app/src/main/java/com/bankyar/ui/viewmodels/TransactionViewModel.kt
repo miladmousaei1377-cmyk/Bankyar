@@ -21,7 +21,8 @@ data class DashboardStats(
 
 private data class TxFilter(
     val userId: Int, val query: String,
-    val category: TransactionCategory?, val yearMonth: String?
+    val category: TransactionCategory?, val yearMonth: String?,
+    val accountName: String?
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -32,16 +33,19 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
     private val _searchQuery = MutableStateFlow("")
     private val _filterCategory = MutableStateFlow<TransactionCategory?>(null)
     private val _filterYearMonth = MutableStateFlow<String?>(null)
+    private val _filterAccount = MutableStateFlow<String?>(null)
     private val _message = MutableStateFlow<String?>(null)
 
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     val filterCategory: StateFlow<TransactionCategory?> = _filterCategory.asStateFlow()
     val filterYearMonth: StateFlow<String?> = _filterYearMonth.asStateFlow()
+    val filterAccount: StateFlow<String?> = _filterAccount.asStateFlow()
     val message: StateFlow<String?> = _message.asStateFlow()
 
     val transactions: StateFlow<List<Transaction>> = combine(
-        _userId, _searchQuery, _filterCategory, _filterYearMonth
-    ) { uid, q, cat, month -> TxFilter(uid, q, cat, month) }
+        combine(_userId, _searchQuery, _filterCategory) { uid, q, cat -> Triple(uid, q, cat) },
+        combine(_filterYearMonth, _filterAccount) { month, acc -> Pair(month, acc) }
+    ) { (uid, q, cat), (month, acc) -> TxFilter(uid, q, cat, month, acc) }
         .flatMapLatest { f ->
             if (f.userId < 0) flowOf(emptyList())
             else {
@@ -49,6 +53,7 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
                 base.map { list ->
                     list.filter { t ->
                         (f.category == null || t.category == f.category) &&
+                        (f.accountName == null || t.accountName == f.accountName) &&
                         (f.yearMonth == null || run {
                             val jalali = JalaliCalendar.toJalaliShort(t.date)
                             val txMonth = jalali.substring(jalali.indexOf('/') + 1)
@@ -80,6 +85,7 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
     fun setSearchQuery(q: String) { _searchQuery.value = q }
     fun setFilterCategory(cat: TransactionCategory?) { _filterCategory.value = cat }
     fun setFilterYearMonth(month: String?) { _filterYearMonth.value = month }
+    fun setFilterAccount(name: String?) { _filterAccount.value = name }
 
     fun addTransaction(t: Transaction) = viewModelScope.launch {
         repo.insert(t); _message.value = "تراکنش با موفقیت ثبت شد"
