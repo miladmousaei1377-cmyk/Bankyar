@@ -10,4 +10,6 @@ class BankAccountRepository(private val dao: BankAccountDao) {
     fun getAllByUser(userId: Int) = dao.getAllByUser(userId)
     suspend fun getById(id: Int) = dao.getById(id)
     suspend fun clearDefault(userId: Int) = dao.clearDefault(userId)
+    suspend fun findByCardLastFour(userId: Int, lastFour: String): BankAccount? =
+        dao.findByCardLastFour(userId, "%$lastFour")
 }

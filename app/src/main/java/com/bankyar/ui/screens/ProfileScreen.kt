@@ -13,14 +13,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.data.PreferencesManager
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.ProfileViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,10 +33,14 @@ fun ProfileScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
+    val scope = rememberCoroutineScope()
     val user by viewModel.getUser(userId).collectAsState(initial = null)
     val message by viewModel.message.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val smsEnabled by prefs.smsAutoRegisterEnabled.collectAsState(initial = false)
 
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
@@ -272,6 +279,41 @@ fun ProfileScreen(
                         Icon(Icons.Default.Key, null, tint = Color.White)
                         Spacer(Modifier.width(8.dp))
                         Text("تغییر رمز عبور", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("پیامک بانکی", fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("ثبت خودکار تراکنش از پیامک",
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "پس از دریافت پیامک بانکی، پیشنهاد ثبت تراکنش نمایش داده می‌شود",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Switch(
+                            checked = smsEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { prefs.setSmsAutoRegisterEnabled(enabled) }
+                            }
+                        )
                     }
                 }
             }

@@ -22,6 +22,8 @@ class PreferencesManager(private val context: Context) {
         private val REMINDER_INITIALIZED = booleanPreferencesKey("reminder_initialized")
         private val LAST_AUTO_BACKUP_TIME = longPreferencesKey("last_auto_backup_time")
         private val BACKUP_SUGGESTION_SHOWN = booleanPreferencesKey("backup_suggestion_shown")
+        private val HAS_SEEN_PERMISSION_SCREEN = booleanPreferencesKey("has_seen_permission_screen")
+        private val SMS_AUTO_REGISTER_ENABLED = booleanPreferencesKey("sms_auto_register_enabled")
     }
 
     val loggedInUserId: Flow<Int> = context.dataStore.data.map { it[LOGGED_IN_USER_ID] ?: -1 }
@@ -33,6 +35,8 @@ class PreferencesManager(private val context: Context) {
     val reminderInitialized: Flow<Boolean> = context.dataStore.data.map { it[REMINDER_INITIALIZED] ?: false }
     val lastAutoBackupTime: Flow<Long> = context.dataStore.data.map { it[LAST_AUTO_BACKUP_TIME] ?: 0L }
     val backupSuggestionShown: Flow<Boolean> = context.dataStore.data.map { it[BACKUP_SUGGESTION_SHOWN] ?: false }
+    val hasSeenPermissionScreen: Flow<Boolean> = context.dataStore.data.map { it[HAS_SEEN_PERMISSION_SCREEN] ?: false }
+    val smsAutoRegisterEnabled: Flow<Boolean> = context.dataStore.data.map { it[SMS_AUTO_REGISTER_ENABLED] ?: false }
 
     suspend fun saveUserId(id: Int) { context.dataStore.edit { it[LOGGED_IN_USER_ID] = id } }
     suspend fun clearUserId() { context.dataStore.edit { it.remove(LOGGED_IN_USER_ID) } }
@@ -45,4 +49,6 @@ class PreferencesManager(private val context: Context) {
     suspend fun markReminderInitialized() { context.dataStore.edit { it[REMINDER_INITIALIZED] = true } }
     suspend fun setLastAutoBackupTime(time: Long) { context.dataStore.edit { it[LAST_AUTO_BACKUP_TIME] = time } }
     suspend fun markBackupSuggestionShown() { context.dataStore.edit { it[BACKUP_SUGGESTION_SHOWN] = true } }
+    suspend fun markPermissionScreenSeen() { context.dataStore.edit { it[HAS_SEEN_PERMISSION_SCREEN] = true } }
+    suspend fun setSmsAutoRegisterEnabled(enabled: Boolean) { context.dataStore.edit { it[SMS_AUTO_REGISTER_ENABLED] = enabled } }
 }

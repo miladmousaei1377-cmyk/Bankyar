@@ -14,13 +14,21 @@ import com.bankyar.R
 
 object NotificationHelper {
     const val CHANNEL_ID = "bankyar_reminder"
+    const val CHANNEL_SMS_ID = "bankyar_sms_transaction"
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "یادآور تراکنش", NotificationManager.IMPORTANCE_DEFAULT
-            ).apply { description = "یادآوری روزانه برای ثبت تراکنش‌ها" }
-            context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID, "یادآور تراکنش", NotificationManager.IMPORTANCE_DEFAULT
+                ).apply { description = "یادآوری روزانه برای ثبت تراکنش‌ها" }
+            )
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_SMS_ID, "تراکنش‌های پیامکی", NotificationManager.IMPORTANCE_HIGH
+                ).apply { description = "پیشنهاد ثبت تراکنش از پیامک بانکی" }
+            )
         }
     }
 
