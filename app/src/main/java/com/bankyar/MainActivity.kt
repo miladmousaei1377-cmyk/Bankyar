@@ -17,19 +17,16 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.work.*
 import com.bankyar.data.PreferencesManager
 import com.bankyar.navigation.BankYarNavGraph
 import com.bankyar.ui.theme.BankYarTheme
 import com.bankyar.ui.viewmodels.ThemeViewModel
-import com.bankyar.util.BackupWorker
 import com.bankyar.util.NotificationHelper
 import com.bankyar.util.ReminderWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,7 +37,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.createChannel(this)
-        scheduleDefaultAutoBackup()
         initDefaultReminderIfNeeded()
         requestNotificationPermissionIfNeeded()
         enableEdgeToEdge()
@@ -81,14 +77,4 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun scheduleDefaultAutoBackup() {
-        val request = PeriodicWorkRequestBuilder<BackupWorker>(30, TimeUnit.MINUTES)
-            .setConstraints(Constraints.NONE)
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            BackupWorker.WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
-    }
 }

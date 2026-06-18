@@ -28,6 +28,9 @@ import androidx.work.*
 import com.bankyar.data.PreferencesManager
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.data.database.entities.BankAccount
+import com.bankyar.data.database.entities.Budget
+import com.bankyar.data.database.entities.Debt
+import com.bankyar.data.database.entities.RecurringTransaction
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.data.database.entities.TransactionType
@@ -75,6 +78,18 @@ fun SettingsScreen(
         }
     }
 
+    val storagePermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            autoBackupEnabled = true
+            scheduleAutoBackup(context)
+            scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("دسترسی به حافظه داده نشد") }
+        }
+    }
+
     fun requestEnableReminder() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -107,10 +122,8 @@ fun SettingsScreen(
     }
 
     LaunchedEffect(Unit) {
-        val backupFile = BackupWorker.getAutoBackupFile(context)
-        if (backupFile.exists()) {
-            lastAutoBackupTime = JalaliCalendar.toJalaliString(backupFile.lastModified())
-        }
+        val ts = prefs.lastAutoBackupTime.first()
+        if (ts > 0L) lastAutoBackupTime = JalaliCalendar.toJalaliString(ts)
         val workInfo = WorkManager.getInstance(context)
             .getWorkInfosForUniqueWork(BackupWorker.WORK_NAME).get()
         autoBackupEnabled = workInfo.isNotEmpty() && workInfo.any {
@@ -339,7 +352,7 @@ fun SettingsScreen(
                             Text("پشتیبان‌گیری هر ۳۰ دقیقه",
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface)
-                            Text("پوشه bankyar در حافظه داخلی",
+                            Text("پوشه Bankyar در Downloads",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp)
                         }
@@ -347,9 +360,16 @@ fun SettingsScreen(
                             checked = autoBackupEnabled,
                             onCheckedChange = { enabled ->
                                 if (enabled) {
-                                    autoBackupEnabled = true
-                                    scheduleAutoBackup(context)
-                                    scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
+                                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                        != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        storagePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                    } else {
+                                        autoBackupEnabled = true
+                                        scheduleAutoBackup(context)
+                                        scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
+                                    }
                                 } else {
                                     autoBackupEnabled = false
                                     cancelAutoBackup(context)
@@ -370,7 +390,7 @@ fun SettingsScreen(
                         }
                     }
                     Text(
-                        "مسیر: Android/data/com.bankyar/files/bankyar/auto_backup.json",
+                        "مسیر: Downloads/Bankyar/auto_backup.json",
                         color = MaterialTheme.colorScheme.outline,
                         fontSize = 10.sp
                     )
@@ -435,6 +455,62 @@ private suspend fun restoreFromJson(context: android.content.Context, userId: In
                 initialBalance = obj.optDouble("initialBalance", 0.0)
             )
         )
+    }
+
+    if (root.has("budgets")) {
+        val budgetArray = root.getJSONArray("budgets")
+        for (i in 0 until budgetArray.length()) {
+            val obj = budgetArray.getJSONObject(i)
+            db.budgetDao().insert(
+                Budget(
+                    id = 0,
+                    userId = userId,
+                    categoryName = obj.getString("categoryName"),
+                    maxAmount = obj.getDouble("maxAmount"),
+                    yearMonth = obj.getString("yearMonth")
+                )
+            )
+        }
+    }
+
+    if (root.has("debts")) {
+        val debtArray = root.getJSONArray("debts")
+        for (i in 0 until debtArray.length()) {
+            val obj = debtArray.getJSONObject(i)
+            db.debtDao().insert(
+                Debt(
+                    id = 0,
+                    userId = userId,
+                    personName = obj.getString("personName"),
+                    amount = obj.getDouble("amount"),
+                    isIOwe = obj.getBoolean("isIOwe"),
+                    description = obj.optString("description", ""),
+                    date = obj.getLong("date"),
+                    isPaid = obj.optBoolean("isPaid", false)
+                )
+            )
+        }
+    }
+
+    if (root.has("recurring")) {
+        val recurArray = root.getJSONArray("recurring")
+        for (i in 0 until recurArray.length()) {
+            val obj = recurArray.getJSONObject(i)
+            db.recurringTransactionDao().insert(
+                RecurringTransaction(
+                    id = 0,
+                    userId = userId,
+                    title = obj.getString("title"),
+                    amount = obj.getDouble("amount"),
+                    type = TransactionType.valueOf(obj.getString("type")),
+                    category = TransactionCategory.valueOf(obj.getString("category")),
+                    accountName = obj.getString("accountName"),
+                    description = obj.optString("description", ""),
+                    periodDays = obj.getInt("periodDays"),
+                    nextDate = obj.getLong("nextDate")
+                )
+            )
+        }
     }
 }
 

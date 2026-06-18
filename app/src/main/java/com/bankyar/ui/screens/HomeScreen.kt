@@ -75,6 +75,7 @@ fun HomeScreen(
     val prefs = remember { PreferencesManager(context) }
     val hasSeenWelcome by prefs.hasSeenWelcome.collectAsState(initial = true)
     var showWelcomeDialog by remember { mutableStateOf(false) }
+    var showBackupSuggestionDialog by remember { mutableStateOf(false) }
     LaunchedEffect(hasSeenWelcome) {
         if (!hasSeenWelcome) showWelcomeDialog = true
     }
@@ -103,9 +104,38 @@ fun HomeScreen(
             confirmButton = {
                 Button(onClick = {
                     showWelcomeDialog = false
+                    showBackupSuggestionDialog = true
                     scope.launch { prefs.markWelcomeSeen() }
                 }) {
                     Text("متوجه شدم")
+                }
+            }
+        )
+    }
+    if (showBackupSuggestionDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupSuggestionDialog = false },
+            icon = { Icon(Icons.Default.Backup, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("پشتیبان‌گیری خودکار", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "برای محافظت از اطلاعات مالی خود، پیشنهاد می‌شود پشتیبان‌گیری خودکار را فعال کنید. " +
+                    "فایل بکاپ در پوشه Downloads/Bankyar ذخیره می‌شود.",
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showBackupSuggestionDialog = false
+                    onSettings()
+                }) {
+                    Text("تنظیمات", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupSuggestionDialog = false }) {
+                    Text("بعداً")
                 }
             }
         )

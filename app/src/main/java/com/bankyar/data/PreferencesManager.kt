@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -19,6 +20,8 @@ class PreferencesManager(private val context: Context) {
         private val REMINDER_HOUR = intPreferencesKey("reminder_hour")
         private val REMINDER_MINUTE = intPreferencesKey("reminder_minute")
         private val REMINDER_INITIALIZED = booleanPreferencesKey("reminder_initialized")
+        private val LAST_AUTO_BACKUP_TIME = longPreferencesKey("last_auto_backup_time")
+        private val BACKUP_SUGGESTION_SHOWN = booleanPreferencesKey("backup_suggestion_shown")
     }
 
     val loggedInUserId: Flow<Int> = context.dataStore.data.map { it[LOGGED_IN_USER_ID] ?: -1 }
@@ -28,6 +31,8 @@ class PreferencesManager(private val context: Context) {
     val reminderHour: Flow<Int> = context.dataStore.data.map { it[REMINDER_HOUR] ?: 21 }
     val reminderMinute: Flow<Int> = context.dataStore.data.map { it[REMINDER_MINUTE] ?: 0 }
     val reminderInitialized: Flow<Boolean> = context.dataStore.data.map { it[REMINDER_INITIALIZED] ?: false }
+    val lastAutoBackupTime: Flow<Long> = context.dataStore.data.map { it[LAST_AUTO_BACKUP_TIME] ?: 0L }
+    val backupSuggestionShown: Flow<Boolean> = context.dataStore.data.map { it[BACKUP_SUGGESTION_SHOWN] ?: false }
 
     suspend fun saveUserId(id: Int) { context.dataStore.edit { it[LOGGED_IN_USER_ID] = id } }
     suspend fun clearUserId() { context.dataStore.edit { it.remove(LOGGED_IN_USER_ID) } }
@@ -38,4 +43,6 @@ class PreferencesManager(private val context: Context) {
         context.dataStore.edit { it[REMINDER_HOUR] = hour; it[REMINDER_MINUTE] = minute }
     }
     suspend fun markReminderInitialized() { context.dataStore.edit { it[REMINDER_INITIALIZED] = true } }
+    suspend fun setLastAutoBackupTime(time: Long) { context.dataStore.edit { it[LAST_AUTO_BACKUP_TIME] = time } }
+    suspend fun markBackupSuggestionShown() { context.dataStore.edit { it[BACKUP_SUGGESTION_SHOWN] = true } }
 }
