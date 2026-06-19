@@ -65,11 +65,20 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 put(MediaStore.Downloads.DISPLAY_NAME, AUTO_BACKUP_FILE_NAME)
                 put(MediaStore.Downloads.MIME_TYPE, "application/json")
                 put(MediaStore.Downloads.RELATIVE_PATH, relPath)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
             val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
                 ?: throw IOException("MediaStore insert returned null")
-            resolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                ?: throw IOException("openOutputStream returned null for $uri")
+            try {
+                resolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                    ?: throw IOException("openOutputStream returned null for $uri")
+                resolver.update(uri, ContentValues().apply {
+                    put(MediaStore.MediaColumns.IS_PENDING, 0)
+                }, null, null)
+            } catch (e: Exception) {
+                resolver.delete(uri, null, null)
+                throw e
+            }
         }
 
         private fun writeViaLegacyFile(json: String) {

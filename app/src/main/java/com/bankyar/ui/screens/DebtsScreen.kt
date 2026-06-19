@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.data.database.entities.Debt
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.viewmodels.DebtViewModel
 import com.bankyar.util.JalaliCalendar
@@ -307,6 +308,7 @@ private fun DebtDialog(
                     label = { Text("مبلغ (تومان)") },
                     leadingIcon = { Icon(Icons.Default.AttachMoney, null, tint = MaterialTheme.colorScheme.primary) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     singleLine = true
