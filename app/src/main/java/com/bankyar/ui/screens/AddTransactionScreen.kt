@@ -343,7 +343,7 @@ fun AddTransactionScreen(
                         amount == null || amount <= 0 -> error = "مبلغ معتبر وارد کنید"
                         else -> {
                             error = null
-                            if (type == TransactionType.EXPENSE) {
+                            if (type != TransactionType.INCOME) {
                                 // Check budget before saving
                                 scope.launch {
                                     val currentMonth = budgetViewModel.currentYearMonth()
@@ -356,10 +356,16 @@ fun AddTransactionScreen(
                                         val spent = budgetViewModel.getSpentForCategoryDirect(
                                             category, currentMonth, matchingBudget.accountName
                                         )
-                                        if (spent + amount > matchingBudget.maxAmount) {
-                                            val accLabel = if (matchingBudget.accountName != null) " (${matchingBudget.accountName})" else ""
-                                            showBudgetWarning = "سقف بودجه دسته‌بندی ${category.label}$accLabel (${formatAmount(matchingBudget.maxAmount)} تومان) در حال رد شدن است.\n\nآیا ادامه می‌دهید؟"
-                                            return@launch
+                                        val accLabel = if (matchingBudget.accountName != null) " (${matchingBudget.accountName})" else ""
+                                        when {
+                                            spent >= matchingBudget.maxAmount -> {
+                                                showBudgetWarning = "سقف بودجه دسته‌بندی «${category.label}»$accLabel تکمیل شده است.\n\nهزینه شده: ${formatAmount(spent)} تومان\nسقف: ${formatAmount(matchingBudget.maxAmount)} تومان\n\nآیا با وجود این، تراکنش را ثبت می‌کنید؟"
+                                                return@launch
+                                            }
+                                            spent + amount > matchingBudget.maxAmount -> {
+                                                showBudgetWarning = "این تراکنش سقف بودجه دسته‌بندی «${category.label}»$accLabel را رد می‌کند.\n\nهزینه شده: ${formatAmount(spent)} تومان\nاین تراکنش: ${formatAmount(amount)} تومان\nسقف: ${formatAmount(matchingBudget.maxAmount)} تومان\n\nآیا ادامه می‌دهید؟"
+                                                return@launch
+                                            }
                                         }
                                     }
                                     doSave()
