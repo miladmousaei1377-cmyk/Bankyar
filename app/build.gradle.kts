@@ -11,17 +11,18 @@ plugins {
 // Load keystore.properties if present (takes priority over env vars)
 val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties()
-val keystoreAvailable: Boolean
-if (keystorePropsFile.exists()) {
-    keystoreProps.load(FileInputStream(keystorePropsFile))
-    keystoreAvailable = true
-} else if (System.getenv("KEYSTORE_PATH") != null && System.getenv("KEYSTORE_PASSWORD") != null) {
-    keystoreAvailable = true
-} else {
-    keystoreAvailable = false
-    println("INFO: keystore.properties not found and KEYSTORE_PATH env var not set.")
-    println("INFO: Release builds will not be signed with a release key.")
-    println("INFO: See keystore.properties.example to set up release signing.")
+val keystoreAvailable: Boolean = when {
+    keystorePropsFile.exists() -> {
+        keystoreProps.load(FileInputStream(keystorePropsFile))
+        true
+    }
+    System.getenv("KEYSTORE_PATH") != null && System.getenv("KEYSTORE_PASSWORD") != null -> true
+    else -> {
+        println("INFO: keystore.properties not found and KEYSTORE_PATH env var not set.")
+        println("INFO: Release builds will not be signed with a release key.")
+        println("INFO: See keystore.properties.example to set up release signing.")
+        false
+    }
 }
 
 android {
