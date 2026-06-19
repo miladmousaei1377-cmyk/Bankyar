@@ -34,7 +34,7 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
             if (uid < 0) flowOf(0.0)
             else db.transactionDao().getAllByUser(uid).map { txs ->
                 txs.filter { t ->
-                    t.category == category && t.type == TransactionType.EXPENSE &&
+                    t.category == category && t.type != TransactionType.INCOME &&
                     (accountName == null || t.accountName == accountName) &&
                     run {
                         val jalali = JalaliCalendar.toJalaliShort(t.date)
@@ -60,7 +60,7 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
         val uid = _userId.value
         if (uid < 0) return 0.0
         return db.transactionDao().getAllByUserSync(uid).filter { t ->
-            t.category == category && t.type == TransactionType.EXPENSE &&
+            t.category == category && t.type != TransactionType.INCOME &&
             (accountName == null || t.accountName == accountName) &&
             run {
                 val jalali = JalaliCalendar.toJalaliShort(t.date)

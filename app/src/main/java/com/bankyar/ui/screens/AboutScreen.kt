@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -31,6 +32,7 @@ import com.bankyar.R
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -104,6 +106,28 @@ fun AboutScreen(onBack: () -> Unit) {
                             textDecoration = TextDecoration.Underline
                         )
                     }
+                }
+            }
+
+            // CafeBazaar link card
+            AboutCard(title = "نرم‌افزار در کافه‌بازار") {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { uriHandler.openUri("https://cafebazaar.ir/app/com.bankyar") }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Star, null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "ثبت امتیاز و نظرات نرم افزار",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
+                        textDecoration = TextDecoration.Underline
+                    )
                 }
             }
 
