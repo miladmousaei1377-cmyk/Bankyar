@@ -55,7 +55,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         @RequiresApi(Build.VERSION_CODES.Q)
         private fun writeViaMediaStore(context: Context, json: String) {
             val resolver = context.contentResolver
-            val relPath = "Downloads/$BACKUP_FOLDER/"
+            val relPath = "Download/$BACKUP_FOLDER/"
             resolver.delete(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                 "${MediaStore.Downloads.RELATIVE_PATH}=? AND ${MediaStore.Downloads.DISPLAY_NAME}=?",

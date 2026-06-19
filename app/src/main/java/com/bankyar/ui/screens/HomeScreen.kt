@@ -76,7 +76,6 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    var showDeleteAllDialog by remember { mutableStateOf(false) }
 
     val prefs = remember { PreferencesManager(context) }
     val hasSeenWelcome by prefs.hasSeenWelcome.collectAsState(initial = true)
@@ -126,7 +125,7 @@ fun HomeScreen(
             text = {
                 Text(
                     "برای محافظت از اطلاعات مالی خود، پیشنهاد می‌شود پشتیبان‌گیری خودکار را فعال کنید. " +
-                    "فایل بکاپ در پوشه Downloads/Bankyar ذخیره می‌شود.",
+                    "فایل بکاپ در پوشه Download/Bankyar ذخیره می‌شود.",
                     fontSize = 14.sp,
                     lineHeight = 22.sp
                 )
@@ -153,23 +152,9 @@ fun HomeScreen(
         message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
     }
 
-    if (showDeleteAllDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteAllDialog = false },
-            title = { Text("حذف همه تراکنش‌ها") },
-            text = { Text("آیا از حذف تمام تراکنش‌ها اطمینان دارید؟ این عملیات قابل بازگشت نیست.") },
-            confirmButton = {
-                TextButton({
-                    viewModel.deleteAllTransactions()
-                    showDeleteAllDialog = false
-                    selectionMode = false
-                    selectedIds = emptySet()
-                }) {
-                    Text("حذف همه", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = { TextButton({ showDeleteAllDialog = false }) { Text("انصراف") } }
-        )
+    // Auto-exit selection mode when all items deselected
+    LaunchedEffect(selectedIds) {
+        if (selectionMode && selectedIds.isEmpty()) selectionMode = false
     }
 
     ModalNavigationDrawer(
@@ -238,13 +223,29 @@ fun HomeScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
-                ExtendedFloatingActionButton(
-                    onClick = onAddTransaction,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    icon = { Icon(Icons.Default.Add, null) },
-                    text = { Text("تراکنش جدید", fontWeight = FontWeight.SemiBold) }
-                )
+                if (selectionMode && selectedIds.isNotEmpty()) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            selectedIds.forEach { id ->
+                                recent.find { it.id == id }?.let { viewModel.deleteTransaction(it) }
+                            }
+                            selectedIds = emptySet()
+                            selectionMode = false
+                        },
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = Color.White,
+                        icon = { Icon(Icons.Default.Delete, null) },
+                        text = { Text("حذف (${selectedIds.size})", fontWeight = FontWeight.SemiBold) }
+                    )
+                } else {
+                    ExtendedFloatingActionButton(
+                        onClick = onAddTransaction,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White,
+                        icon = { Icon(Icons.Default.Add, null) },
+                        text = { Text("تراکنش جدید", fontWeight = FontWeight.SemiBold) }
+                    )
+                }
             }
         ) { padding ->
             LazyColumn(
@@ -344,51 +345,17 @@ fun HomeScreen(
                 }
 
                 item {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text("تراکنش‌های اخیر", fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(bottom = 4.dp))
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(onViewAll, modifier = Modifier.weight(1f)) {
-                                Text("مشاهده همه", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-                            }
-                            TextButton(
-                                onClick = {
-                                    selectionMode = !selectionMode
-                                    if (!selectionMode) selectedIds = emptySet()
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    if (selectionMode) "لغو انتخاب" else "انتخاب تکی",
-                                    color = if (selectionMode) MaterialTheme.colorScheme.error
-                                            else MaterialTheme.colorScheme.secondary,
-                                    fontSize = 12.sp
-                                )
-                            }
-                            TextButton(
-                                onClick = {
-                                    if (selectionMode && selectedIds.isNotEmpty()) {
-                                        selectedIds.forEach { id ->
-                                            recent.find { it.id == id }?.let { viewModel.deleteTransaction(it) }
-                                        }
-                                        selectedIds = emptySet()
-                                        selectionMode = false
-                                    } else {
-                                        showDeleteAllDialog = true
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    if (selectionMode && selectedIds.isNotEmpty()) "حذف انتخاب‌ها" else "حذف همه",
-                                    color = MaterialTheme.colorScheme.error, fontSize = 12.sp
-                                )
-                            }
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onBackground)
+                        TextButton(onClick = onViewAll) {
+                            Text("مشاهده همه", color = MaterialTheme.colorScheme.primary,
+                                fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -404,13 +371,14 @@ fun HomeScreen(
                     }
                 } else {
                     items(recent) { t ->
+                        val isSelected = selectedIds.contains(t.id)
                         if (selectionMode) {
                             Row(
                                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
-                                    checked = selectedIds.contains(t.id),
+                                    checked = isSelected,
                                     onCheckedChange = { checked ->
                                         selectedIds = if (checked) selectedIds + t.id else selectedIds - t.id
                                     }
@@ -419,9 +387,9 @@ fun HomeScreen(
                                     TransactionItem(
                                         t = t,
                                         accountColor = parseCardColor(accountColorMap[t.accountName]),
+                                        isSelected = isSelected,
                                         onClick = {
-                                            selectedIds = if (selectedIds.contains(t.id))
-                                                selectedIds - t.id else selectedIds + t.id
+                                            selectedIds = if (isSelected) selectedIds - t.id else selectedIds + t.id
                                         }
                                     )
                                 }
@@ -430,7 +398,11 @@ fun HomeScreen(
                             TransactionItem(
                                 t = t,
                                 accountColor = parseCardColor(accountColorMap[t.accountName]),
-                                onClick = { onTransactionClick(t.id) }
+                                onClick = { onTransactionClick(t.id) },
+                                onLongClick = {
+                                    selectionMode = true
+                                    selectedIds = setOf(t.id)
+                                }
                             )
                         }
                     }
@@ -629,19 +601,28 @@ private fun DrawerItem(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TransactionItem(t: Transaction, accountColor: Color? = null, onClick: () -> Unit) {
+fun TransactionItem(
+    t: Transaction,
+    accountColor: Color? = null,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    isSelected: Boolean = false
+) {
     val (bg, fg) = when (t.type) {
         TransactionType.INCOME -> MaterialTheme.colorScheme.surface to Color(0xFF2E7D32)
         TransactionType.EXPENSE -> MaterialTheme.colorScheme.surface to Color(0xFFC62828)
         TransactionType.TRANSFER -> MaterialTheme.colorScheme.surface to Color(0xFF1565C0)
     }
     val amountPrefix = when (t.type) { TransactionType.INCOME -> "+"; TransactionType.EXPENSE -> "-"; else -> "" }
+    val cardBg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
 
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clickable(onClick = onClick),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

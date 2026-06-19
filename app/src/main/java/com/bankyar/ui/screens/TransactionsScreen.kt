@@ -43,6 +43,24 @@ fun TransactionsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var filterType by remember { mutableStateOf<TransactionType?>(null) }
     var showFilterPanel by remember { mutableStateOf(false) }
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            title = { Text("حذف همه تراکنش‌ها") },
+            text = { Text("آیا از حذف تمام تراکنش‌ها اطمینان دارید؟ این عملیات قابل بازگشت نیست.") },
+            confirmButton = {
+                TextButton({
+                    viewModel.deleteAllTransactions()
+                    showDeleteAllDialog = false
+                }) {
+                    Text("حذف همه", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ showDeleteAllDialog = false }) { Text("انصراف") } }
+        )
+    }
 
     // account name → card color map
     val accountColorMap = remember(accounts) { accounts.associate { it.title to it.cardColor } }
@@ -68,6 +86,9 @@ fun TransactionsScreen(
                 title = { Text("همه تراکنش‌ها", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.Default.ArrowBack, null) } },
                 actions = {
+                    IconButton({ showDeleteAllDialog = true }) {
+                        Icon(Icons.Default.DeleteSweep, null, tint = Color.White)
+                    }
                     IconButton({ showFilterPanel = !showFilterPanel }) {
                         val hasFilter = filterCategory != null || filterMonth != null || filterAccountName != null
                         Icon(

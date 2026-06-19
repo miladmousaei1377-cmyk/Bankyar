@@ -178,12 +178,13 @@ private fun BudgetCard(
     onEdit: () -> Unit
 ) {
     val category = TransactionCategory.entries.find { it.name == budget.categoryName }
-    val spentFlow = remember(budget.categoryName, yearMonth, budget.accountName) {
-        viewModel.getSpentForCategoryAndAccount(
-            category ?: TransactionCategory.OTHER, yearMonth, budget.accountName
-        )
+    val resolvedCategory = category ?: TransactionCategory.OTHER
+    // produceState: immediately loads via suspend then stays reactive via Flow
+    val spent by produceState(initialValue = 0.0, budget.id, yearMonth, budget.accountName) {
+        value = viewModel.getSpentForCategoryDirect(resolvedCategory, yearMonth, budget.accountName)
+        viewModel.getSpentForCategoryAndAccount(resolvedCategory, yearMonth, budget.accountName)
+            .collect { value = it }
     }
-    val spent by spentFlow.collectAsState(initial = 0.0)
 
     val progress = if (budget.maxAmount > 0) (spent / budget.maxAmount).coerceIn(0.0, 1.0).toFloat() else 0f
     val progressColor = when {

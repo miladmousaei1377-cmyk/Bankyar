@@ -107,7 +107,7 @@ fun SettingsScreen(
                     }
                     prefs.setLastAutoBackupTime(System.currentTimeMillis())
                     lastAutoBackupTime = JalaliCalendar.toJalaliString(System.currentTimeMillis())
-                    snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد — نسخه در Downloads/Bankyar ذخیره شد")
+                    snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد — نسخه در Download/Bankyar ذخیره شد")
                 } catch (e: Exception) {
                     snackbarHostState.showSnackbar("پشتیبان‌گیری فعال شد")
                 }
@@ -441,7 +441,7 @@ fun SettingsScreen(
                             Text("پشتیبان‌گیری هر ۱ ساعت",
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface)
-                            Text("پوشه Bankyar در Downloads",
+                            Text("پوشه Bankyar در Download",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp)
                         }
@@ -465,7 +465,7 @@ fun SettingsScreen(
                                                 }
                                                 prefs.setLastAutoBackupTime(System.currentTimeMillis())
                                                 lastAutoBackupTime = JalaliCalendar.toJalaliString(System.currentTimeMillis())
-                                                snackbarHostState.showSnackbar("نسخه پشتیبان در Downloads/Bankyar ذخیره شد")
+                                                snackbarHostState.showSnackbar("نسخه پشتیبان در Download/Bankyar ذخیره شد")
                                             } catch (e: Exception) {
                                                 snackbarHostState.showSnackbar("خطا در پشتیبان‌گیری: ${e.message}")
                                             }
@@ -491,7 +491,7 @@ fun SettingsScreen(
                         }
                     }
                     Text(
-                        "مسیر اصلی: Downloads/Bankyar/auto_backup.json\nمسیر پشتیبان: Android/data/com.bankyar/files/Bankyar/auto_backup.json",
+                        "مسیر اصلی: Download/Bankyar/auto_backup.json\nمسیر پشتیبان: Android/data/com.bankyar/files/Bankyar/auto_backup.json",
                         color = MaterialTheme.colorScheme.outline,
                         fontSize = 10.sp,
                         lineHeight = 15.sp
