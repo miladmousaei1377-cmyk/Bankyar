@@ -80,3 +80,9 @@ jobs:
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup signing artifacts
+        if: always()
+        run: |
+          rm -f ${{ github.workspace }}/bankyar.jks
+          rm -f ${{ github.workspace }}/keystore.properties
