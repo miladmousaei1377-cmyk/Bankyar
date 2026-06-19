@@ -25,7 +25,6 @@ import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.BudgetViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -348,15 +347,15 @@ fun AddTransactionScreen(
                                 // Check budget before saving
                                 scope.launch {
                                     val currentMonth = budgetViewModel.currentYearMonth()
-                                    val budgetList = budgetViewModel.getBudgetsForMonth(currentMonth).first()
+                                    val budgetList = budgetViewModel.getBudgetsForMonthDirect(currentMonth)
                                     val matchingBudget = budgetList.find { b ->
                                         b.categoryName == category.name &&
                                         (b.accountName == null || b.accountName == accountName)
                                     }
                                     if (matchingBudget != null) {
-                                        val spent = budgetViewModel.getSpentForCategoryAndAccount(
+                                        val spent = budgetViewModel.getSpentForCategoryDirect(
                                             category, currentMonth, matchingBudget.accountName
-                                        ).first()
+                                        )
                                         if (spent + amount > matchingBudget.maxAmount) {
                                             val accLabel = if (matchingBudget.accountName != null) " (${matchingBudget.accountName})" else ""
                                             showBudgetWarning = "سقف بودجه دسته‌بندی ${category.label}$accLabel (${formatAmount(matchingBudget.maxAmount)} تومان) در حال رد شدن است.\n\nآیا ادامه می‌دهید؟"

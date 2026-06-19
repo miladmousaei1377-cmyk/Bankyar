@@ -99,8 +99,19 @@ fun SettingsScreen(
         if (granted) {
             autoBackupEnabled = true
             scheduleAutoBackup(context)
-            runImmediateBackup(context)
-            scope.launch { snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد") }
+            scope.launch {
+                try {
+                    val json = BackupWorker.buildBackupJson(context, userId)
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        BackupWorker.writeBackupFile(context, json)
+                    }
+                    prefs.setLastAutoBackupTime(System.currentTimeMillis())
+                    lastAutoBackupTime = JalaliCalendar.toJalaliString(System.currentTimeMillis())
+                    snackbarHostState.showSnackbar("پشتیبان‌گیری خودکار فعال شد — نسخه در Downloads/Bankyar ذخیره شد")
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("پشتیبان‌گیری فعال شد")
+                }
+            }
         } else {
             scope.launch { snackbarHostState.showSnackbar("دسترسی به حافظه داده نشد") }
         }
@@ -427,7 +438,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("پشتیبان‌گیری هر ۳۰ دقیقه",
+                            Text("پشتیبان‌گیری هر ۱ ساعت",
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface)
                             Text("پوشه Bankyar در Downloads",
@@ -446,8 +457,19 @@ fun SettingsScreen(
                                     } else {
                                         autoBackupEnabled = true
                                         scheduleAutoBackup(context)
-                                        runImmediateBackup(context)
-                                        scope.launch { snackbarHostState.showSnackbar("در حال ایجاد نسخه پشتیبان...") }
+                                        scope.launch {
+                                            try {
+                                                val json = BackupWorker.buildBackupJson(context, userId)
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    BackupWorker.writeBackupFile(context, json)
+                                                }
+                                                prefs.setLastAutoBackupTime(System.currentTimeMillis())
+                                                lastAutoBackupTime = JalaliCalendar.toJalaliString(System.currentTimeMillis())
+                                                snackbarHostState.showSnackbar("نسخه پشتیبان در Downloads/Bankyar ذخیره شد")
+                                            } catch (e: Exception) {
+                                                snackbarHostState.showSnackbar("خطا در پشتیبان‌گیری: ${e.message}")
+                                            }
+                                        }
                                     }
                                 } else {
                                     autoBackupEnabled = false
@@ -549,7 +571,8 @@ private suspend fun restoreFromJson(context: android.content.Context, userId: In
                     userId = userId,
                     categoryName = obj.getString("categoryName"),
                     maxAmount = obj.getDouble("maxAmount"),
-                    yearMonth = obj.getString("yearMonth")
+                    yearMonth = obj.getString("yearMonth"),
+                    accountName = if (obj.has("accountName") && !obj.isNull("accountName")) obj.getString("accountName") else null
                 )
             )
         }
@@ -597,7 +620,7 @@ private suspend fun restoreFromJson(context: android.content.Context, userId: In
 }
 
 private fun scheduleAutoBackup(context: android.content.Context) {
-    val request = PeriodicWorkRequestBuilder<BackupWorker>(30, TimeUnit.MINUTES)
+    val request = PeriodicWorkRequestBuilder<BackupWorker>(60, TimeUnit.MINUTES)
         .setConstraints(Constraints.NONE)
         .build()
     WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -640,10 +663,4 @@ private fun ReminderTimePickerDialog(
 
 private fun cancelAutoBackup(context: android.content.Context) {
     WorkManager.getInstance(context).cancelUniqueWork(BackupWorker.WORK_NAME)
-}
-
-private fun runImmediateBackup(context: android.content.Context) {
-    WorkManager.getInstance(context).enqueue(
-        OneTimeWorkRequestBuilder<BackupWorker>().build()
-    )
 }

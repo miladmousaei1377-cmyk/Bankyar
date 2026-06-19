@@ -158,6 +158,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                             put("categoryName", b.categoryName)
                             put("maxAmount", b.maxAmount)
                             put("yearMonth", b.yearMonth)
+                            if (b.accountName != null) put("accountName", b.accountName)
                         })
                     }
                 })

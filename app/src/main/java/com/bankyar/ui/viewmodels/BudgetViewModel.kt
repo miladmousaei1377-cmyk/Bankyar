@@ -29,21 +29,6 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
             if (uid < 0) flowOf(emptyList()) else db.budgetDao().getByUserAndMonth(uid, yearMonth)
         }
 
-    fun getSpentForCategory(category: TransactionCategory, yearMonth: String): Flow<Double> =
-        _userId.flatMapLatest { uid ->
-            if (uid < 0) flowOf(0.0)
-            else db.transactionDao().getAllByUser(uid).map { txs ->
-                txs.filter { t ->
-                    t.category == category && t.type == TransactionType.EXPENSE &&
-                    run {
-                        val jalali = JalaliCalendar.toJalaliShort(t.date)
-                        val txMonth = jalali.substring(jalali.indexOf('/') + 1)
-                        txMonth == yearMonth
-                    }
-                }.sumOf { it.amount }
-            }
-        }
-
     fun getSpentForCategoryAndAccount(category: TransactionCategory, yearMonth: String, accountName: String?): Flow<Double> =
         _userId.flatMapLatest { uid ->
             if (uid < 0) flowOf(0.0)
@@ -59,6 +44,31 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
                 }.sumOf { it.amount }
             }
         }
+
+    // Direct suspend methods — used in AddTransactionScreen for reliable one-shot reads
+    suspend fun getBudgetsForMonthDirect(yearMonth: String): List<Budget> {
+        val uid = _userId.value
+        if (uid < 0) return emptyList()
+        return db.budgetDao().getByUserAndMonthSync(uid, yearMonth)
+    }
+
+    suspend fun getSpentForCategoryDirect(
+        category: TransactionCategory,
+        yearMonth: String,
+        accountName: String?
+    ): Double {
+        val uid = _userId.value
+        if (uid < 0) return 0.0
+        return db.transactionDao().getAllByUserSync(uid).filter { t ->
+            t.category == category && t.type == TransactionType.EXPENSE &&
+            (accountName == null || t.accountName == accountName) &&
+            run {
+                val jalali = JalaliCalendar.toJalaliShort(t.date)
+                val txMonth = jalali.substring(jalali.indexOf('/') + 1)
+                txMonth == yearMonth
+            }
+        }.sumOf { it.amount }
+    }
 
     fun saveBudget(userId: Int, categoryName: String, maxAmount: Double, yearMonth: String, accountName: String? = null) =
         viewModelScope.launch {

@@ -178,9 +178,12 @@ private fun BudgetCard(
     onEdit: () -> Unit
 ) {
     val category = TransactionCategory.entries.find { it.name == budget.categoryName }
-    val spent by viewModel.getSpentForCategoryAndAccount(
-        category ?: TransactionCategory.OTHER, yearMonth, budget.accountName
-    ).collectAsState(initial = 0.0)
+    val spentFlow = remember(budget.categoryName, yearMonth, budget.accountName) {
+        viewModel.getSpentForCategoryAndAccount(
+            category ?: TransactionCategory.OTHER, yearMonth, budget.accountName
+        )
+    }
+    val spent by spentFlow.collectAsState(initial = 0.0)
 
     val progress = if (budget.maxAmount > 0) (spent / budget.maxAmount).coerceIn(0.0, 1.0).toFloat() else 0f
     val progressColor = when {

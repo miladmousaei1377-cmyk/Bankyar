@@ -1,8 +1,27 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+// Load keystore.properties if present (takes priority over env vars)
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties()
+val keystoreAvailable: Boolean
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(FileInputStream(keystorePropsFile))
+    keystoreAvailable = true
+} else if (System.getenv("KEYSTORE_PATH") != null && System.getenv("KEYSTORE_PASSWORD") != null) {
+    keystoreAvailable = true
+} else {
+    keystoreAvailable = false
+    println("INFO: keystore.properties not found and KEYSTORE_PATH env var not set.")
+    println("INFO: Release builds will not be signed with a release key.")
+    println("INFO: See keystore.properties.example to set up release signing.")
 }
 
 android {
@@ -20,10 +39,17 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "bankyar.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-            keyAlias = System.getenv("KEY_ALIAS") ?: ""
-            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            if (keystorePropsFile.exists()) {
+                storeFile = file(keystoreProps.getProperty("storeFile") ?: "release-key.jks")
+                storePassword = keystoreProps.getProperty("storePassword") ?: ""
+                keyAlias = keystoreProps.getProperty("keyAlias") ?: ""
+                keyPassword = keystoreProps.getProperty("keyPassword") ?: ""
+            } else {
+                storeFile = file(System.getenv("KEYSTORE_PATH") ?: "release-key.jks")
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            }
         }
     }
 
@@ -31,7 +57,9 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            if (keystoreAvailable) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {

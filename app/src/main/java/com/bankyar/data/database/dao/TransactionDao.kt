@@ -39,4 +39,7 @@ interface TransactionDao {
 
     @Query("SELECT SUM(amount) FROM transactions WHERE userId = :userId AND accountName = :accountName AND type = :type")
     fun sumByTypeAndAccount(userId: Int, accountName: String, type: TransactionType): Flow<Double?>
+
+    @Query("SELECT * FROM transactions WHERE userId = :userId ORDER BY date DESC")
+    suspend fun getAllByUserSync(userId: Int): List<Transaction>
 }

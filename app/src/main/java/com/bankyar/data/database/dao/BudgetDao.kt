@@ -18,6 +18,9 @@ interface BudgetDao {
     @Query("SELECT * FROM budgets WHERE userId = :userId AND yearMonth = :yearMonth")
     fun getByUserAndMonth(userId: Int, yearMonth: String): Flow<List<Budget>>
 
+    @Query("SELECT * FROM budgets WHERE userId = :userId AND yearMonth = :yearMonth")
+    suspend fun getByUserAndMonthSync(userId: Int, yearMonth: String): List<Budget>
+
     @Query("SELECT * FROM budgets WHERE userId = :userId")
     fun getAllByUser(userId: Int): Flow<List<Budget>>
 }
