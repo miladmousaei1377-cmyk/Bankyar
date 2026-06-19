@@ -22,6 +22,7 @@ class RecurringViewModel(app: Application) : AndroidViewModel(app) {
     fun setUser(userId: Int) { _userId.value = userId }
 
     fun add(rt: RecurringTransaction) = viewModelScope.launch { db.recurringTransactionDao().insert(rt) }
+    fun update(rt: RecurringTransaction) = viewModelScope.launch { db.recurringTransactionDao().update(rt) }
     fun delete(rt: RecurringTransaction) = viewModelScope.launch { db.recurringTransactionDao().delete(rt) }
 
     fun processDue(userId: Int) = viewModelScope.launch {

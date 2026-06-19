@@ -22,8 +22,11 @@ import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.viewmodels.AccountsViewModel
+import com.bankyar.ui.viewmodels.BudgetViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,9 +35,13 @@ fun AddTransactionScreen(
     editId: Int = -1,
     viewModel: TransactionViewModel,
     accountsViewModel: AccountsViewModel,
+    budgetViewModel: BudgetViewModel,
     onBack: () -> Unit
 ) {
-    LaunchedEffect(userId) { accountsViewModel.setUser(userId) }
+    LaunchedEffect(userId) {
+        accountsViewModel.setUser(userId)
+        budgetViewModel.setUser(userId)
+    }
 
     var existing by remember { mutableStateOf<Transaction?>(null) }
     LaunchedEffect(editId) { if (editId > 0) existing = viewModel.getById(editId) }
@@ -49,8 +56,10 @@ fun AddTransactionScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var selectedDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     var showJalaliPicker by remember { mutableStateOf(false) }
+    var showBudgetWarning by remember { mutableStateOf<String?>(null) }
 
     val accounts by accountsViewModel.accounts.collectAsState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(accounts) {
         if (editId <= 0 && accountName.isEmpty()) {
@@ -82,6 +91,42 @@ fun AddTransactionScreen(
         TransactionType.INCOME -> Color(0xFF2E7D32)
         TransactionType.EXPENSE -> Color(0xFFC62828)
         TransactionType.TRANSFER -> Color(0xFF1565C0)
+    }
+
+    // Extract actual save logic into a local lambda
+    fun doSave() {
+        val amount = amountText.toDoubleOrNull() ?: return
+        error = null
+        val tr = Transaction(
+            id = if (isEdit) editId else 0,
+            userId = userId, title = title, amount = amount,
+            type = type, category = category,
+            description = description, accountName = accountName,
+            date = selectedDateMillis
+        )
+        if (isEdit) viewModel.updateTransaction(tr) else viewModel.addTransaction(tr)
+        onBack()
+    }
+
+    if (showBudgetWarning != null) {
+        AlertDialog(
+            onDismissRequest = { showBudgetWarning = null },
+            icon = { Icon(Icons.Default.Warning, null, tint = Color(0xFFE65100)) },
+            title = { Text("هشدار سقف بودجه", fontWeight = FontWeight.Bold) },
+            text = { Text(showBudgetWarning!!, lineHeight = 22.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBudgetWarning = null
+                        doSave()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("ادامه و ثبت", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ showBudgetWarning = null }) { Text("انصراف") } }
+        )
     }
 
     Scaffold(
@@ -299,15 +344,24 @@ fun AddTransactionScreen(
                         amount == null || amount <= 0 -> error = "مبلغ معتبر وارد کنید"
                         else -> {
                             error = null
-                            val tr = Transaction(
-                                id = if (isEdit) editId else 0,
-                                userId = userId, title = title, amount = amount,
-                                type = type, category = category,
-                                description = description, accountName = accountName,
-                                date = selectedDateMillis
-                            )
-                            if (isEdit) viewModel.updateTransaction(tr) else viewModel.addTransaction(tr)
-                            onBack()
+                            if (type == TransactionType.EXPENSE) {
+                                // Check budget before saving
+                                scope.launch {
+                                    val currentMonth = budgetViewModel.currentYearMonth()
+                                    val budgetList = budgetViewModel.getBudgetsForMonth(currentMonth).first()
+                                    val matchingBudget = budgetList.find { it.categoryName == category.name }
+                                    if (matchingBudget != null) {
+                                        val spent = budgetViewModel.getSpentForCategory(category, currentMonth).first()
+                                        if (spent + amount > matchingBudget.maxAmount) {
+                                            showBudgetWarning = "سقف بودجه دسته‌بندی ${category.label} (${formatAmount(matchingBudget.maxAmount)} تومان) در حال رد شدن است. آیا ادامه می‌دهید؟"
+                                            return@launch
+                                        }
+                                    }
+                                    doSave()
+                                }
+                            } else {
+                                doSave()
+                            }
                         }
                     }
                 },

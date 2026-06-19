@@ -191,6 +191,7 @@ fun BankYarNavGraph() {
                 editId = back.arguments?.getInt("editId") ?: -1,
                 viewModel = transactionViewModel,
                 accountsViewModel = accountsViewModel,
+                budgetViewModel = budgetViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -269,6 +270,7 @@ fun BankYarNavGraph() {
             BudgetScreen(
                 userId = loggedInUserId,
                 viewModel = budgetViewModel,
+                accountsViewModel = accountsViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -285,6 +287,7 @@ fun BankYarNavGraph() {
             RecurringScreen(
                 userId = loggedInUserId,
                 viewModel = recurringViewModel,
+                accountsViewModel = accountsViewModel,
                 onBack = { navController.popBackStack() }
             )
         }

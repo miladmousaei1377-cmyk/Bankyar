@@ -18,10 +18,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.RecurringTransaction
 import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.data.database.entities.TransactionType
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.components.formatAmount
+import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.RecurringViewModel
 import com.bankyar.util.JalaliCalendar
 
@@ -30,19 +33,28 @@ import com.bankyar.util.JalaliCalendar
 fun RecurringScreen(
     userId: Int,
     viewModel: RecurringViewModel,
+    accountsViewModel: AccountsViewModel,
     onBack: () -> Unit
 ) {
     LaunchedEffect(userId) { viewModel.setUser(userId) }
 
     val items by viewModel.items.collectAsState()
+    val accounts by accountsViewModel.accounts.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
+    var editItem by remember { mutableStateOf<RecurringTransaction?>(null) }
     var deleteTarget by remember { mutableStateOf<RecurringTransaction?>(null) }
 
     if (showDialog) {
         RecurringDialog(
             userId = userId,
-            onDismiss = { showDialog = false },
-            onSave = { rt -> viewModel.add(rt); showDialog = false }
+            edit = editItem,
+            accounts = accounts,
+            onDismiss = { showDialog = false; editItem = null },
+            onSave = { rt ->
+                if (editItem != null) viewModel.update(rt.copy(id = editItem!!.id))
+                else viewModel.add(rt)
+                showDialog = false; editItem = null
+            }
         )
     }
 
@@ -74,7 +86,7 @@ fun RecurringScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showDialog = true },
+                onClick = { editItem = null; showDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White
             ) { Icon(Icons.Default.Add, null) }
@@ -101,7 +113,11 @@ fun RecurringScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(items, key = { it.id }) { rt ->
-                    RecurringCard(rt, onDelete = { deleteTarget = rt })
+                    RecurringCard(
+                        rt = rt,
+                        onDelete = { deleteTarget = rt },
+                        onEdit = { editItem = rt; showDialog = true }
+                    )
                 }
             }
         }
@@ -116,7 +132,7 @@ private fun periodLabel(periodDays: Int): String = when (periodDays) {
 }
 
 @Composable
-private fun RecurringCard(rt: RecurringTransaction, onDelete: () -> Unit) {
+private fun RecurringCard(rt: RecurringTransaction, onDelete: () -> Unit, onEdit: () -> Unit) {
     val (typeColor, typeBg, typeLabel) = when (rt.type) {
         TransactionType.INCOME -> Triple(Color(0xFF2E7D32), Color(0xFFE8F5E9), "درآمد")
         TransactionType.EXPENSE -> Triple(Color(0xFFC62828), Color(0xFFFFEBEE), "هزینه")
@@ -177,6 +193,9 @@ private fun RecurringCard(rt: RecurringTransaction, onDelete: () -> Unit) {
                 }
             }
 
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary)
+            }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
             }
@@ -188,24 +207,37 @@ private fun RecurringCard(rt: RecurringTransaction, onDelete: () -> Unit) {
 @Composable
 private fun RecurringDialog(
     userId: Int,
+    edit: RecurringTransaction?,
+    accounts: List<BankAccount>,
     onDismiss: () -> Unit,
     onSave: (RecurringTransaction) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var amountText by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(TransactionType.EXPENSE) }
-    var category by remember { mutableStateOf(TransactionCategory.OTHER) }
-    var accountName by remember { mutableStateOf("حساب اصلی") }
-    var description by remember { mutableStateOf("") }
-    var periodDays by remember { mutableStateOf(30) }
+    val defaultAccountName = edit?.accountName
+        ?: accounts.firstOrNull { it.isDefault }?.title
+        ?: accounts.firstOrNull()?.title
+        ?: "حساب اصلی"
+
+    var title by remember { mutableStateOf(edit?.title ?: "") }
+    var amountText by remember { mutableStateOf(edit?.amount?.toLong()?.toString() ?: "") }
+    var type by remember { mutableStateOf(edit?.type ?: TransactionType.EXPENSE) }
+    var category by remember { mutableStateOf(edit?.category ?: TransactionCategory.OTHER) }
+    var accountName by remember { mutableStateOf(defaultAccountName) }
+    var description by remember { mutableStateOf(edit?.description ?: "") }
+    var periodDays by remember { mutableStateOf(edit?.periodDays ?: 30) }
     var categoryExpanded by remember { mutableStateOf(false) }
+    var accountExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
 
     val periodOptions = listOf(1 to "هر روز", 7 to "هر ۷ روز (هفتگی)", 30 to "هر ۳۰ روز (ماهانه)")
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("تراکنش تکرارشونده جدید", fontWeight = FontWeight.Bold) },
+        title = {
+            Text(
+                if (edit == null) "تراکنش تکرارشونده جدید" else "ویرایش تراکنش تکرارشونده",
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
             Column(
                 Modifier.imePadding().verticalScroll(rememberScrollState()),
@@ -246,6 +278,7 @@ private fun RecurringDialog(
                     label = { Text("مبلغ (تومان)") },
                     leadingIcon = { Icon(Icons.Default.AttachMoney, null, tint = MaterialTheme.colorScheme.primary) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     singleLine = true
@@ -278,15 +311,45 @@ private fun RecurringDialog(
                     }
                 }
 
-                OutlinedTextField(
-                    value = accountName,
-                    onValueChange = { accountName = it },
-                    label = { Text("نام حساب") },
-                    leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true
-                )
+                // Account dropdown
+                if (accounts.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
+                        expanded = accountExpanded,
+                        onExpandedChange = { accountExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = accountName,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("نام حساب") },
+                            leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.primary) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(accountExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = accountExpanded,
+                            onDismissRequest = { accountExpanded = false }
+                        ) {
+                            accounts.forEach { acc ->
+                                DropdownMenuItem(
+                                    text = { Text(acc.title) },
+                                    onClick = { accountName = acc.title; accountExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = accountName,
+                        onValueChange = { accountName = it },
+                        label = { Text("نام حساب") },
+                        leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+                }
 
                 // Period selector
                 Text("دوره تکرار", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -338,7 +401,7 @@ private fun RecurringDialog(
                                 accountName = accountName,
                                 description = description,
                                 periodDays = periodDays,
-                                nextDate = System.currentTimeMillis()
+                                nextDate = edit?.nextDate ?: System.currentTimeMillis()
                             )
                         )
                     }

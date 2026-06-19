@@ -44,6 +44,22 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
+    fun getSpentForCategoryAndAccount(category: TransactionCategory, yearMonth: String, accountName: String?): Flow<Double> =
+        _userId.flatMapLatest { uid ->
+            if (uid < 0) flowOf(0.0)
+            else db.transactionDao().getAllByUser(uid).map { txs ->
+                txs.filter { t ->
+                    t.category == category && t.type == TransactionType.EXPENSE &&
+                    (accountName == null || t.accountName == accountName) &&
+                    run {
+                        val jalali = JalaliCalendar.toJalaliShort(t.date)
+                        val txMonth = jalali.substring(jalali.indexOf('/') + 1)
+                        txMonth == yearMonth
+                    }
+                }.sumOf { it.amount }
+            }
+        }
+
     fun saveBudget(userId: Int, categoryName: String, maxAmount: Double, yearMonth: String) =
         viewModelScope.launch {
             db.budgetDao().insert(Budget(
@@ -53,6 +69,8 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
                 yearMonth = yearMonth
             ))
         }
+
+    fun updateBudget(budget: Budget) = viewModelScope.launch { db.budgetDao().update(budget) }
 
     fun deleteBudget(budget: Budget) = viewModelScope.launch { db.budgetDao().delete(budget) }
 }

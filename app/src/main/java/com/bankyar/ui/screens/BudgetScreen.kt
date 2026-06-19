@@ -3,6 +3,7 @@ package com.bankyar.ui.screens
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,7 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.data.database.entities.Budget
 import com.bankyar.data.database.entities.TransactionCategory
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.components.formatAmount
+import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.BudgetViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,12 +31,15 @@ import com.bankyar.ui.viewmodels.BudgetViewModel
 fun BudgetScreen(
     userId: Int,
     viewModel: BudgetViewModel,
+    accountsViewModel: AccountsViewModel,
     onBack: () -> Unit
 ) {
     LaunchedEffect(userId) { viewModel.setUser(userId) }
 
     val currentMonth = remember { viewModel.currentYearMonth() }
     val budgets by viewModel.getBudgetsForMonth(currentMonth).collectAsState(initial = emptyList())
+    val accounts by accountsViewModel.accounts.collectAsState()
+    var selectedAccount by remember { mutableStateOf<String?>(null) }
 
     var showDialog by remember { mutableStateOf(false) }
     var editBudget by remember { mutableStateOf<Budget?>(null) }
@@ -46,7 +52,11 @@ fun BudgetScreen(
             yearMonth = currentMonth,
             onDismiss = { showDialog = false; editBudget = null },
             onSave = { catName, maxAmt ->
-                viewModel.saveBudget(userId, catName, maxAmt, currentMonth)
+                if (editBudget != null) {
+                    viewModel.updateBudget(editBudget!!.copy(categoryName = catName, maxAmount = maxAmt))
+                } else {
+                    viewModel.saveBudget(userId, catName, maxAmt, currentMonth)
+                }
                 showDialog = false; editBudget = null
             }
         )
@@ -89,34 +99,65 @@ fun BudgetScreen(
             ) { Icon(Icons.Default.Add, null) }
         }
     ) { padding ->
-        if (budgets.isEmpty()) {
-            Box(
-                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Savings, null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
-                    Spacer(Modifier.height(12.dp))
-                    Text("هیچ بودجه‌ای تعریف نشده", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("روی + بزنید تا بودجه تعریف کنید",
-                        color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+        Column(
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding)
+        ) {
+            // Account filter row
+            if (accounts.isNotEmpty()) {
+                LazyRow(
+                    Modifier
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = selectedAccount == null,
+                            onClick = { selectedAccount = null },
+                            label = { Text("همه حساب‌ها", fontSize = 12.sp) }
+                        )
+                    }
+                    items(accounts) { acc ->
+                        FilterChip(
+                            selected = selectedAccount == acc.title,
+                            onClick = { selectedAccount = if (selectedAccount == acc.title) null else acc.title },
+                            label = { Text(acc.title, fontSize = 12.sp) }
+                        )
+                    }
                 }
             }
-        } else {
-            LazyColumn(
-                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding),
-                contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 80.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(budgets, key = { it.id }) { budget ->
-                    BudgetCard(
-                        budget = budget,
-                        userId = userId,
-                        viewModel = viewModel,
-                        yearMonth = currentMonth,
-                        onDelete = { deleteTarget = budget }
-                    )
+
+            if (budgets.isEmpty()) {
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Savings, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("هیچ بودجه‌ای تعریف نشده", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("روی + بزنید تا بودجه تعریف کنید",
+                            color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(budgets, key = { it.id }) { budget ->
+                        BudgetCard(
+                            budget = budget,
+                            userId = userId,
+                            viewModel = viewModel,
+                            yearMonth = currentMonth,
+                            selectedAccount = selectedAccount,
+                            onDelete = { deleteTarget = budget },
+                            onEdit = { editBudget = budget; showDialog = true }
+                        )
+                    }
                 }
             }
         }
@@ -129,11 +170,13 @@ private fun BudgetCard(
     userId: Int,
     viewModel: BudgetViewModel,
     yearMonth: String,
-    onDelete: () -> Unit
+    selectedAccount: String?,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     val category = TransactionCategory.entries.find { it.name == budget.categoryName }
-    val spent by viewModel.getSpentForCategory(
-        category ?: TransactionCategory.OTHER, yearMonth
+    val spent by viewModel.getSpentForCategoryAndAccount(
+        category ?: TransactionCategory.OTHER, yearMonth, selectedAccount
     ).collectAsState(initial = 0.0)
 
     val progress = if (budget.maxAmount > 0) (spent / budget.maxAmount).coerceIn(0.0, 1.0).toFloat() else 0f
@@ -179,6 +222,10 @@ private fun BudgetCard(
                                 .padding(horizontal = 6.dp, vertical = 3.dp)
                         ) { Text("از بودجه گذشت!", color = Color(0xFFC62828), fontSize = 10.sp, fontWeight = FontWeight.Bold) }
                         Spacer(Modifier.width(4.dp))
+                    }
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Edit, null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     }
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Delete, null,
@@ -272,6 +319,7 @@ private fun BudgetDialog(
                     label = { Text("سقف بودجه (تومان)") },
                     leadingIcon = { Icon(Icons.Default.AttachMoney, null, tint = MaterialTheme.colorScheme.primary) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     singleLine = true
