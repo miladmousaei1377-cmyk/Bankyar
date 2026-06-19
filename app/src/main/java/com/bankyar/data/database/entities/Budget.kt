@@ -7,8 +7,8 @@ import androidx.room.PrimaryKey
 data class Budget(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val userId: Int,
-    val category: TransactionCategory,
-    val limitAmount: Double,
-    val month: Int,
-    val year: Int
+    val categoryName: String,
+    val maxAmount: Double,
+    val yearMonth: String,
+    val accountName: String? = null
 )

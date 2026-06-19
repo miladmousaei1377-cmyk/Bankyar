@@ -23,4 +23,10 @@ interface BankAccountDao {
 
     @Query("UPDATE bank_accounts SET isDefault = 0 WHERE userId = :userId")
     suspend fun clearDefault(userId: Int)
+
+    @Query("SELECT * FROM bank_accounts WHERE userId = :userId AND cardNumber LIKE :pattern LIMIT 1")
+    suspend fun findByCardLastFour(userId: Int, pattern: String): BankAccount?
+
+    @Query("DELETE FROM bank_accounts WHERE userId = :userId")
+    suspend fun deleteAllByUser(userId: Int)
 }

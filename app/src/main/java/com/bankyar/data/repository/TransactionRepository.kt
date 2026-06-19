@@ -13,5 +13,5 @@ class TransactionRepository(private val dao: TransactionDao) {
     fun search(userId: Int, q: String) = dao.search(userId, q)
     fun sumByType(userId: Int, type: TransactionType) = dao.sumByType(userId, type)
     suspend fun getById(id: Int) = dao.getById(id)
-    fun getByDateRange(userId: Int, from: Long, to: Long) = dao.getByDateRange(userId, from, to)
+    suspend fun deleteAll(userId: Int) = dao.deleteAllByUser(userId)
 }

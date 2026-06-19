@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -27,16 +28,23 @@ import com.bankyar.ui.viewmodels.ProfileViewModel
 fun ProfileScreen(
     userId: Int,
     viewModel: ProfileViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
     val user by viewModel.getUser(userId).collectAsState(initial = null)
     val message by viewModel.message.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showLogoutDialog by remember { mutableStateOf(false) }
 
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
-    var editMode by remember { mutableStateOf(false) }
-    var showPinDialog by remember { mutableStateOf(false) }
+    var currentPin by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var confirmPin by remember { mutableStateOf("") }
+    var showCurrentPin by remember { mutableStateOf(false) }
+    var showNewPin by remember { mutableStateOf(false) }
+    var showConfirmPin by remember { mutableStateOf(false) }
 
     LaunchedEffect(user) {
         user?.let { name = it.name; phone = it.phone }
@@ -45,18 +53,21 @@ fun ProfileScreen(
         message?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
-            editMode = false
-            showPinDialog = false
         }
     }
 
-    if (showPinDialog) {
-        user?.let { u ->
-            ChangePinDialog(
-                onConfirm = { cur, new_, conf -> viewModel.changePin(u, cur, new_, conf) },
-                onDismiss = { showPinDialog = false }
-            )
-        }
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("خروج از حساب") },
+            text = { Text("آیا مطمئن هستید که می‌خواهید از حساب خارج شوید؟") },
+            confirmButton = {
+                TextButton(onClick = { showLogoutDialog = false; onLogout() }) {
+                    Text("خروج", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ showLogoutDialog = false }) { Text("انصراف") } }
+        )
     }
 
     Scaffold(
@@ -65,13 +76,6 @@ fun ProfileScreen(
             TopAppBar(
                 title = { Text("پروفایل", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.Default.ArrowBack, null) } },
-                actions = {
-                    if (!editMode) {
-                        IconButton({ editMode = true }) {
-                            Icon(Icons.Default.Edit, null, tint = Color.White)
-                        }
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
@@ -85,13 +89,13 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(Modifier.height(8.dp))
-            // Avatar
             Box(
                 Modifier.size(90.dp).clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
@@ -131,7 +135,6 @@ fun ProfileScreen(
                         onValueChange = { name = it },
                         label = { Text("نام و نام خانوادگی") },
                         leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary) },
-                        enabled = editMode,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -139,9 +142,8 @@ fun ProfileScreen(
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                             focusedTextColor = MaterialTheme.colorScheme.onSurface,
                             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
                         )
                     )
 
@@ -150,7 +152,6 @@ fun ProfileScreen(
                         onValueChange = { phone = it },
                         label = { Text("شماره موبایل") },
                         leadingIcon = { Icon(Icons.Default.Phone, null, tint = MaterialTheme.colorScheme.primary) },
-                        enabled = editMode,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -159,30 +160,20 @@ fun ProfileScreen(
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                             focusedTextColor = MaterialTheme.colorScheme.onSurface,
                             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
                         )
                     )
 
-                    if (editMode) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    user?.let { name = it.name; phone = it.phone }
-                                    editMode = false
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            ) { Text("انصراف") }
-
-                            Button(
-                                onClick = { user?.let { viewModel.updateProfile(it, name, phone) } },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
-                        }
+                    Button(
+                        onClick = { user?.let { viewModel.updateProfile(it, name, phone) } },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Save, null, tint = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text("ذخیره اطلاعات", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -193,26 +184,110 @@ fun ProfileScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("تغییر رمز عبور", fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface)
-                            Text("رمز PIN ورود به برنامه",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                        }
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("تغییر رمز عبور", fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+
+                    OutlinedTextField(
+                        value = currentPin,
+                        onValueChange = { currentPin = it },
+                        label = { Text("رمز عبور فعلی") },
+                        leadingIcon = { Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary) },
+                        trailingIcon = {
+                            IconButton({ showCurrentPin = !showCurrentPin }) {
+                                Icon(if (showCurrentPin) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                            }
+                        },
+                        visualTransformation = if (showCurrentPin) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = newPin,
+                        onValueChange = { newPin = it },
+                        label = { Text("رمز عبور جدید") },
+                        leadingIcon = { Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.primary) },
+                        trailingIcon = {
+                            IconButton({ showNewPin = !showNewPin }) {
+                                Icon(if (showNewPin) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                            }
+                        },
+                        visualTransformation = if (showNewPin) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = confirmPin,
+                        onValueChange = { confirmPin = it },
+                        label = { Text("تکرار رمز عبور جدید") },
+                        leadingIcon = { Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.primary) },
+                        trailingIcon = {
+                            IconButton({ showConfirmPin = !showConfirmPin }) {
+                                Icon(if (showConfirmPin) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                            }
+                        },
+                        visualTransformation = if (showConfirmPin) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                        )
+                    )
+
+                    Button(
+                        onClick = {
+                            user?.let {
+                                viewModel.changePassword(it, currentPin, newPin, confirmPin)
+                                currentPin = ""; newPin = ""; confirmPin = ""
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Icon(Icons.Default.Key, null, tint = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text("تغییر رمز عبور", fontWeight = FontWeight.Bold, color = Color.White)
                     }
-                    OutlinedButton(
-                        onClick = { showPinDialog = true },
-                        shape = RoundedCornerShape(10.dp)
-                    ) { Text("تغییر") }
                 }
+            }
+
+            OutlinedButton(
+                onClick = { showLogoutDialog = true },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+            ) {
+                Icon(Icons.Default.Logout, null, tint = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.width(8.dp))
+                Text("خروج از حساب کاربری", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
             }
         }
     }

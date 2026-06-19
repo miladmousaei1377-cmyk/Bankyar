@@ -1,19 +1,27 @@
 package com.bankyar.navigation
 
+import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.bankyar.data.PreferencesManager
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.data.repository.UserRepository
 import com.bankyar.ui.screens.*
 import com.bankyar.ui.viewmodels.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
     object Auth : Screen("auth")
+    object Lock : Screen("lock")
     object Home : Screen("home")
     object Transactions : Screen("transactions")
     object AddTransaction : Screen("add?editId={editId}") {
@@ -27,6 +35,14 @@ sealed class Screen(val route: String) {
     object Reports : Screen("reports")
     object Budget : Screen("budget")
     object About : Screen("about")
+    object Settings : Screen("settings")
+    object Budget : Screen("budget")
+    object Debts : Screen("debts")
+    object Recurring : Screen("recurring")
+    object AccountStatement : Screen("account_statement/{accountName}") {
+        fun route(accountName: String) = "account_statement/${Uri.encode(accountName)}"
+    }
+    object Permissions : Screen("permissions")
 }
 
 @Composable
@@ -38,10 +54,16 @@ fun BankYarNavGraph() {
     val profileViewModel: ProfileViewModel = viewModel()
     val themeViewModel: ThemeViewModel = viewModel()
     val budgetViewModel: BudgetViewModel = viewModel()
+    val debtViewModel: DebtViewModel = viewModel()
+    val recurringViewModel: RecurringViewModel = viewModel()
 
     val loggedInUserId by authViewModel.loggedInUserId.collectAsState()
+    val isSessionActive by authViewModel.isSessionActive.collectAsState()
+    val biometricEnabled by authViewModel.biometricEnabled.collectAsState()
     val isDarkMode by themeViewModel.isDarkMode.collectAsState()
     val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
+    val hasSeenPermissionScreen by prefs.hasSeenPermissionScreen.collectAsState(initial = true)
     var userName by remember { mutableStateOf("کاربر") }
     val scope = rememberCoroutineScope()
 
@@ -54,25 +76,85 @@ fun BankYarNavGraph() {
         }
     }
 
-    val startDest = if (loggedInUserId > 0) Screen.Home.route else Screen.Auth.route
+    // Process due recurring transactions when user is logged in
+    LaunchedEffect(loggedInUserId) {
+        if (loggedInUserId > 0) {
+            recurringViewModel.processDue(loggedInUserId)
+        }
+    }
+
+    // Determine start destination based on session state
+    val startDest = when {
+        loggedInUserId > 0 && isSessionActive -> Screen.Home.route
+        loggedInUserId > 0 -> Screen.Lock.route
+        else -> Screen.Auth.route
+    }
+
+    // React to auth/session state changes
+    LaunchedEffect(loggedInUserId, isSessionActive) {
+        val current = navController.currentBackStackEntry?.destination?.route
+        when {
+            loggedInUserId <= 0 -> {
+                if (current != null && current != Screen.Auth.route) {
+                    navController.navigate(Screen.Auth.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+            loggedInUserId > 0 && !isSessionActive -> {
+                if (current != null && current != Screen.Lock.route && current != Screen.Auth.route) {
+                    navController.navigate(Screen.Lock.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+        }
+    }
+
+    // Redirect to permissions screen if user hasn't seen it yet
+    LaunchedEffect(loggedInUserId, isSessionActive, hasSeenPermissionScreen) {
+        val current = navController.currentBackStackEntry?.destination?.route
+        if (loggedInUserId > 0 && isSessionActive && !hasSeenPermissionScreen
+            && current != null && current != Screen.Permissions.route
+            && current != Screen.Lock.route && current != Screen.Auth.route) {
+            navController.navigate(Screen.Permissions.route) { popUpTo(0) { inclusive = true } }
+        }
+    }
 
     NavHost(navController = navController, startDestination = startDest) {
 
         composable(Screen.Auth.route) {
             AuthScreen(authViewModel) {
-                navController.navigate(Screen.Home.route) {
+                val dest = if (!hasSeenPermissionScreen) Screen.Permissions.route else Screen.Home.route
+                navController.navigate(dest) {
                     popUpTo(Screen.Auth.route) { inclusive = true }
                 }
             }
         }
 
+        composable(Screen.Lock.route) {
+            LockScreen(
+                userId = loggedInUserId,
+                userName = userName,
+                biometricEnabled = biometricEnabled,
+                onUnlocked = {
+                    authViewModel.activateSession()
+                    val dest = if (!hasSeenPermissionScreen) Screen.Permissions.route else Screen.Home.route
+                    navController.navigate(dest) { popUpTo(0) { inclusive = true } }
+                },
+                onSwitchAccount = {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                    authViewModel.logout()
+                }
+            )
+        }
+
         composable(Screen.Home.route) {
-            if (loggedInUserId > 0) {
+            if (loggedInUserId > 0 && isSessionActive) {
                 HomeScreen(
                     userId = loggedInUserId,
                     userName = userName,
                     isDarkMode = isDarkMode,
                     viewModel = transactionViewModel,
+                    accountsViewModel = accountsViewModel,
                     onToggleDarkMode = { themeViewModel.toggle() },
                     onAddTransaction = { navController.navigate(Screen.AddTransaction.route()) },
                     onViewAll = { navController.navigate(Screen.Transactions.route) },
@@ -82,19 +164,20 @@ fun BankYarNavGraph() {
                     onReports = { navController.navigate(Screen.Reports.route) },
                     onBudget = { navController.navigate(Screen.Budget.route) },
                     onAbout = { navController.navigate(Screen.About.route) },
-                    onLogout = {
-                        authViewModel.logout()
-                        navController.navigate(Screen.Auth.route) {
-                            popUpTo(Screen.Home.route) { inclusive = true }
-                        }
-                    }
+                    onSettings = { navController.navigate(Screen.Settings.route) },
+                    onBudget = { navController.navigate(Screen.Budget.route) },
+                    onDebts = { navController.navigate(Screen.Debts.route) },
+                    onRecurring = { navController.navigate(Screen.Recurring.route) }
                 )
+            } else {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
             }
         }
 
         composable(Screen.Transactions.route) {
             TransactionsScreen(
                 viewModel = transactionViewModel,
+                accountsViewModel = accountsViewModel,
                 onBack = { navController.popBackStack() },
                 onAddTransaction = { navController.navigate(Screen.AddTransaction.route()) },
                 onTransactionClick = { navController.navigate(Screen.TransactionDetail.route(it)) }
@@ -110,6 +193,7 @@ fun BankYarNavGraph() {
                 editId = back.arguments?.getInt("editId") ?: -1,
                 viewModel = transactionViewModel,
                 accountsViewModel = accountsViewModel,
+                budgetViewModel = budgetViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -130,7 +214,13 @@ fun BankYarNavGraph() {
             ProfileScreen(
                 userId = loggedInUserId,
                 viewModel = profileViewModel,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onLogout = {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                    authViewModel.logout()
+                }
             )
         }
 
@@ -146,6 +236,21 @@ fun BankYarNavGraph() {
             ReportsScreen(
                 userId = loggedInUserId,
                 viewModel = transactionViewModel,
+                accountsViewModel = accountsViewModel,
+                onAccountClick = { navController.navigate(Screen.AccountStatement.route(it)) },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            Screen.AccountStatement.route,
+            arguments = listOf(navArgument("accountName") { type = NavType.StringType })
+        ) { back ->
+            AccountStatementScreen(
+                userId = loggedInUserId,
+                accountName = back.arguments?.getString("accountName") ?: return@composable,
+                viewModel = transactionViewModel,
+                accountsViewModel = accountsViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -160,6 +265,51 @@ fun BankYarNavGraph() {
 
         composable(Screen.About.route) {
             AboutScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                userId = loggedInUserId,
+                biometricEnabled = biometricEnabled,
+                onBiometricToggle = { authViewModel.setBiometricEnabled(it) },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Budget.route) {
+            BudgetScreen(
+                userId = loggedInUserId,
+                viewModel = budgetViewModel,
+                accountsViewModel = accountsViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Debts.route) {
+            DebtsScreen(
+                userId = loggedInUserId,
+                viewModel = debtViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Recurring.route) {
+            RecurringScreen(
+                userId = loggedInUserId,
+                viewModel = recurringViewModel,
+                accountsViewModel = accountsViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Permissions.route) {
+            PermissionsScreen(
+                onContinue = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Permissions.route) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

@@ -1,9 +1,15 @@
 package com.bankyar.ui.screens
 
+import android.app.Activity
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,26 +19,37 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.R
+import com.bankyar.data.PreferencesManager
+import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionType
 import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.theme.*
+import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     userId: Int,
     userName: String,
     isDarkMode: Boolean,
     viewModel: TransactionViewModel,
+    accountsViewModel: AccountsViewModel,
     onToggleDarkMode: () -> Unit,
     onAddTransaction: () -> Unit,
     onViewAll: () -> Unit,
@@ -42,19 +59,103 @@ fun HomeScreen(
     onReports: () -> Unit,
     onBudget: () -> Unit,
     onAbout: () -> Unit,
-    onLogout: () -> Unit
+    onSettings: () -> Unit,
+    onBudget: () -> Unit = {},
+    onDebts: () -> Unit = {},
+    onRecurring: () -> Unit = {}
 ) {
-    LaunchedEffect(userId) { viewModel.setUser(userId) }
+    val context = LocalContext.current
+    LaunchedEffect(userId) {
+        viewModel.setUser(userId)
+        accountsViewModel.setUser(userId)
+    }
 
-    val stats by viewModel.stats.collectAsState()
     val recent by viewModel.recentTransactions.collectAsState()
     val message by viewModel.message.collectAsState()
+    val accounts by accountsViewModel.accounts.collectAsState()
+    val accountColorMap = remember(accounts) { accounts.associate { it.title to it.cardColor } }
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    val prefs = remember { PreferencesManager(context) }
+    val hasSeenWelcome by prefs.hasSeenWelcome.collectAsState(initial = true)
+    var showWelcomeDialog by remember { mutableStateOf(false) }
+    var showBackupSuggestionDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(hasSeenWelcome) {
+        if (!hasSeenWelcome) showWelcomeDialog = true
+    }
+    if (showWelcomeDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("خوش آمدید به بانک‌یار", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    WelcomeTip(Icons.Default.Settings, "تنظیمات اثر انگشت",
+                        "برای فعال‌سازی ورود با اثر انگشت به صفحه تنظیمات بروید.")
+                    WelcomeTip(Icons.Default.Backup, "پشتیبان‌گیری خودکار",
+                        "پشتیبان‌گیری خودکار هر ۳۰ دقیقه در تنظیمات قابل فعال‌سازی است.")
+                    WelcomeTip(Icons.Default.AccountBalance, "مدیریت حساب‌ها",
+                        "از منوی کشویی گزینه «حساب‌های بانکی» را انتخاب کنید تا حساب‌های خود را مدیریت کنید.")
+                    WelcomeTip(Icons.Default.NotificationsActive, "یادآور ثبت تراکنش",
+                        "از بخش تنظیمات می‌توانید یادآور روزانه فعال کنید تا هر روز در ساعت دلخواه نوتیفیکیشن دریافت کنید.")
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showWelcomeDialog = false
+                    showBackupSuggestionDialog = true
+                    scope.launch { prefs.markWelcomeSeen() }
+                }) {
+                    Text("متوجه شدم")
+                }
+            }
+        )
+    }
+    if (showBackupSuggestionDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupSuggestionDialog = false },
+            icon = { Icon(Icons.Default.Backup, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("پشتیبان‌گیری خودکار", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "برای محافظت از اطلاعات مالی خود، پیشنهاد می‌شود پشتیبان‌گیری خودکار را فعال کنید. " +
+                    "فایل بکاپ در پوشه Download/Bankyar ذخیره می‌شود.",
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showBackupSuggestionDialog = false
+                    onSettings()
+                }) {
+                    Text("تنظیمات", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupSuggestionDialog = false }) {
+                    Text("بعداً")
+                }
+            }
+        )
+    }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<Int>()) }
+
     LaunchedEffect(message) {
         message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
+    }
+
+    // Auto-exit selection mode when all items deselected
+    LaunchedEffect(selectedIds) {
+        if (selectionMode && selectedIds.isEmpty()) selectionMode = false
     }
 
     ModalNavigationDrawer(
@@ -64,19 +165,20 @@ fun HomeScreen(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.width(300.dp)
             ) {
-                // Header
                 Box(
                     Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).padding(24.dp)
                 ) {
                     Column {
-                        Box(
-                            Modifier.size(60.dp).clip(CircleShape)
-                                .background(Color.White.copy(0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(userName.firstOrNull()?.toString() ?: "؟",
-                                color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Image(
+                            painter = painterResource(R.drawable.app_logo),
+                            contentDescription = "بانک‌یار",
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White)
+                                .padding(4.dp),
+                            contentScale = ContentScale.Fit
+                        )
                         Spacer(Modifier.height(10.dp))
                         Text(userName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Text("بانک‌یار", color = Color.White.copy(0.7f), fontSize = 12.sp)
@@ -86,26 +188,38 @@ fun HomeScreen(
                 Spacer(Modifier.height(8.dp))
 
                 DrawerItem(Icons.Default.Person, "پروفایل") {
-                    scope.launch { drawerState.close() }; onProfile()
+                    scope.launch { drawerState.close(); onProfile() }
                 }
                 DrawerItem(Icons.Default.AccountBalance, "مدیریت حساب‌ها") {
-                    scope.launch { drawerState.close() }; onAccounts()
+                    scope.launch { drawerState.close(); onAccounts() }
                 }
                 DrawerItem(Icons.Default.BarChart, "گزارشات") {
-                    scope.launch { drawerState.close() }; onReports()
+                    scope.launch { drawerState.close(); onReports() }
+                }
+                DrawerItem(Icons.Default.Savings, "بودجه‌بندی") {
+                    scope.launch { drawerState.close(); onBudget() }
+                }
+                DrawerItem(Icons.Default.AccountBalanceWallet, "بدهی و طلب") {
+                    scope.launch { drawerState.close(); onDebts() }
+                }
+                DrawerItem(Icons.Default.Repeat, "تراکنش‌های تکرارشونده") {
+                    scope.launch { drawerState.close(); onRecurring() }
+                }
+                DrawerItem(Icons.Default.Settings, "تنظیمات") {
+                    scope.launch { drawerState.close(); onSettings() }
                 }
                 DrawerItem(Icons.Default.Savings, "مدیریت بودجه") {
                     scope.launch { drawerState.close() }; onBudget()
                 }
                 DrawerItem(Icons.Default.Info, "درباره ما") {
-                    scope.launch { drawerState.close() }; onAbout()
+                    scope.launch { drawerState.close(); onAbout() }
                 }
 
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MaterialTheme.colorScheme.outline.copy(0.3f))
 
-                DrawerItem(Icons.Default.Logout, "خروج", tint = MaterialTheme.colorScheme.error) {
-                    scope.launch { drawerState.close() }; onLogout()
+                DrawerItem(Icons.Default.ExitToApp, "خروج از نرم‌افزار", tint = MaterialTheme.colorScheme.error) {
+                    scope.launch { drawerState.close(); (context as? Activity)?.finish() }
                 }
             }
         }
@@ -113,13 +227,29 @@ fun HomeScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
-                ExtendedFloatingActionButton(
-                    onClick = onAddTransaction,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    icon = { Icon(Icons.Default.Add, null) },
-                    text = { Text("تراکنش جدید", fontWeight = FontWeight.SemiBold) }
-                )
+                if (selectionMode && selectedIds.isNotEmpty()) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            selectedIds.forEach { id ->
+                                recent.find { it.id == id }?.let { viewModel.deleteTransaction(it) }
+                            }
+                            selectedIds = emptySet()
+                            selectionMode = false
+                        },
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = Color.White,
+                        icon = { Icon(Icons.Default.Delete, null) },
+                        text = { Text("حذف (${selectedIds.size})", fontWeight = FontWeight.SemiBold) }
+                    )
+                } else {
+                    ExtendedFloatingActionButton(
+                        onClick = onAddTransaction,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White,
+                        icon = { Icon(Icons.Default.Add, null) },
+                        text = { Text("تراکنش جدید", fontWeight = FontWeight.SemiBold) }
+                    )
+                }
             }
         ) { padding ->
             LazyColumn(
@@ -127,24 +257,19 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 item {
-                    // TopBar
                     Row(
                         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Right side: menu icon
                         IconButton({ scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
-
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("خوش آمدید", color = Color.White.copy(0.8f), fontSize = 12.sp)
                             Text(userName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
-
-                        // Left side: dark mode toggle
                         IconButton(onToggleDarkMode) {
                             Icon(
                                 if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
@@ -154,35 +279,87 @@ fun HomeScreen(
                     }
                 }
 
+                // Account cards pager
                 item {
-                    // Balance card
-                    Card(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-                        elevation = CardDefaults.cardElevation(4.dp)
-                    ) {
-                        Column(Modifier.padding(20.dp)) {
-                            Text("موجودی کل", color = Color.White.copy(0.8f), fontSize = 13.sp)
-                            Spacer(Modifier.height(8.dp))
-                            Text("${formatAmount(stats.totalBalance)} تومان",
-                                color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(16.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                BalanceChip("درآمد", stats.totalIncome, Color(0xFF81C784))
-                                BalanceChip("هزینه", stats.totalExpense, Color(0xFFEF9A9A))
+                    val sortedAccounts = remember(accounts) { accounts.sortedByDescending { it.isDefault } }
+
+                    if (sortedAccounts.isEmpty()) {
+                        Card(
+                            Modifier.fillMaxWidth().padding(16.dp).clickable { onAccounts() },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                            elevation = CardDefaults.cardElevation(4.dp)
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(vertical = 32.dp, horizontal = 20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    Modifier.size(56.dp).clip(CircleShape)
+                                        .background(Color.White.copy(0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                                }
+                                Text("حسابی ثبت نشده", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("برای اضافه کردن حساب کلیک کنید", color = Color.White.copy(0.75f), fontSize = 13.sp)
+                            }
+                        }
+                    } else {
+                        val pagerState = rememberPagerState(pageCount = { sortedAccounts.size })
+                        Column(Modifier.padding(top = 4.dp, bottom = 4.dp)) {
+                            HorizontalPager(
+                                state = pagerState,
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                pageSpacing = 10.dp
+                            ) { page ->
+                                AccountBalanceCard(
+                                    acc = sortedAccounts[page],
+                                    userId = userId,
+                                    accountsViewModel = accountsViewModel
+                                )
+                            }
+                            if (sortedAccounts.size > 1) {
+                                Spacer(Modifier.height(10.dp))
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    repeat(sortedAccounts.size) { i ->
+                                        Box(
+                                            Modifier.padding(horizontal = 3.dp)
+                                                .size(
+                                                    width = if (pagerState.currentPage == i) 18.dp else 8.dp,
+                                                    height = 8.dp
+                                                )
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    if (pagerState.currentPage == i)
+                                                        MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.primary.copy(0.3f)
+                                                )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
                 item {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text("تراکنش‌های اخیر", fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onBackground)
-                        TextButton(onViewAll) {
-                            Text("مشاهده همه", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                        TextButton(onClick = onViewAll) {
+                            Text("مشاهده همه", color = MaterialTheme.colorScheme.primary,
+                                fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -197,10 +374,216 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    items(recent) { t -> TransactionItem(t, onClick = { onTransactionClick(t.id) }) }
+                    items(recent) { t ->
+                        val isSelected = selectedIds.contains(t.id)
+                        if (selectionMode) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedIds = if (checked) selectedIds + t.id else selectedIds - t.id
+                                    }
+                                )
+                                Box(Modifier.weight(1f)) {
+                                    TransactionItem(
+                                        t = t,
+                                        accountColor = parseCardColor(accountColorMap[t.accountName]),
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            selectedIds = if (isSelected) selectedIds - t.id else selectedIds + t.id
+                                        }
+                                    )
+                                }
+                            }
+                        } else {
+                            TransactionItem(
+                                t = t,
+                                accountColor = parseCardColor(accountColorMap[t.accountName]),
+                                onClick = { onTransactionClick(t.id) },
+                                onLongClick = {
+                                    selectionMode = true
+                                    selectedIds = setOf(t.id)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+private val CARD_PRESET_COLORS = listOf(
+    "" to "پیش‌فرض",
+    "#1565C0" to "آبی",
+    "#1B5E20" to "سبز",
+    "#6A1B9A" to "بنفش",
+    "#B71C1C" to "قرمز",
+    "#E65100" to "نارنجی",
+    "#006064" to "فیروزه‌ای",
+    "#37474F" to "خاکستری",
+    "#4E342E" to "قهوه‌ای",
+    "#880E4F" to "صورتی"
+)
+
+internal fun parseCardColor(hex: String?): Color? {
+    if (hex.isNullOrBlank()) return null
+    return try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { null }
+}
+
+@Composable
+private fun AccountBalanceCard(acc: BankAccount, userId: Int, accountsViewModel: AccountsViewModel) {
+    val netBalance by accountsViewModel.getNetBalance(userId, acc.title).collectAsState(initial = 0.0)
+    val currentBalance = acc.initialBalance + netBalance
+    val isPositive = currentBalance >= 0
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val cardBgColor = remember(acc.cardColor) { parseCardColor(acc.cardColor) } ?: primaryColor
+
+    var showColorPicker by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var refreshTarget by remember { mutableFloatStateOf(0f) }
+    val refreshRotation by animateFloatAsState(
+        targetValue = refreshTarget,
+        animationSpec = tween(500),
+        label = "refresh",
+        finishedListener = { isRefreshing = false }
+    )
+
+    if (showColorPicker) {
+        AlertDialog(
+            onDismissRequest = { showColorPicker = false },
+            title = { Text("رنگ کارت", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("رنگ پس‌زمینه کارت را انتخاب کنید:",
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(14.dp))
+                    CARD_PRESET_COLORS.chunked(5).forEach { row ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            row.forEach { (hex, name) ->
+                                val swatch = if (hex.isBlank()) primaryColor
+                                    else try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { primaryColor }
+                                val isSelected = acc.cardColor == hex
+                                Box(
+                                    Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(swatch)
+                                        .then(if (isSelected) Modifier.border(3.dp, Color.White, CircleShape) else Modifier)
+                                        .clickable {
+                                            accountsViewModel.updateAccount(acc.copy(cardColor = hex))
+                                            showColorPicker = false
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (hex.isBlank()) Icon(Icons.Default.Palette, contentDescription = name,
+                                        tint = Color.White, modifier = Modifier.size(22.dp))
+                                    else if (isSelected) Icon(Icons.Default.Check, contentDescription = null,
+                                        tint = Color.White, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showColorPicker = false }) { Text("بستن") }
+            }
+        )
+    }
+
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBgColor),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AccountBalance, null,
+                        tint = Color.White.copy(0.9f), modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(acc.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    if (acc.isDefault) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier.clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(0.2f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) { Text("پیش‌فرض", color = Color.White, fontSize = 10.sp) }
+                    }
+                }
+                Row {
+                    IconButton(
+                        onClick = {
+                            if (!isRefreshing) {
+                                isRefreshing = true
+                                refreshTarget += 360f
+                            }
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "بروزرسانی",
+                            modifier = Modifier.size(18.dp).rotate(refreshRotation),
+                            tint = Color.White.copy(0.8f))
+                    }
+                    IconButton(
+                        onClick = { showColorPicker = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Palette, contentDescription = "تغییر رنگ",
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White.copy(0.8f))
+                    }
+                }
+            }
+
+            if (acc.bankName.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(acc.bankName, color = Color.White.copy(0.7f), fontSize = 12.sp)
+            }
+
+            if (acc.cardNumber.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    maskCardNumber(acc.cardNumber),
+                    color = Color.White.copy(0.8f),
+                    fontSize = 13.sp,
+                    style = TextStyle(textDirection = TextDirection.Ltr)
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Text("موجودی فعلی", color = Color.White.copy(0.75f), fontSize = 11.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${formatAmount(currentBalance)} تومان",
+                color = if (isPositive) Color.White else Color(0xFFFFCDD2),
+                fontWeight = FontWeight.Bold, fontSize = 22.sp
+            )
+        }
+    }
+}
+
+private fun maskCardNumber(cardNumber: String): String {
+    val digits = cardNumber.filter { it.isDigit() }
+    return when {
+        digits.length == 16 -> "${digits.take(4)}-****-****-${digits.takeLast(4)}"
+        digits.length >= 4 -> "****-${digits.takeLast(4)}"
+        else -> cardNumber
     }
 }
 
@@ -222,35 +605,28 @@ private fun DrawerItem(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BalanceChip(label: String, amount: Double, color: Color) {
-    Row(
-        Modifier.clip(RoundedCornerShape(10.dp)).background(Color.White.copy(0.15f))
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text(label, color = Color.White.copy(0.8f), fontSize = 11.sp)
-            Text("${formatAmount(amount)} ت", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-        }
-    }
-}
-
-@Composable
-fun TransactionItem(t: Transaction, onClick: () -> Unit) {
+fun TransactionItem(
+    t: Transaction,
+    accountColor: Color? = null,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    isSelected: Boolean = false
+) {
     val (bg, fg) = when (t.type) {
         TransactionType.INCOME -> MaterialTheme.colorScheme.surface to Color(0xFF2E7D32)
         TransactionType.EXPENSE -> MaterialTheme.colorScheme.surface to Color(0xFFC62828)
         TransactionType.TRANSFER -> MaterialTheme.colorScheme.surface to Color(0xFF1565C0)
     }
     val amountPrefix = when (t.type) { TransactionType.INCOME -> "+"; TransactionType.EXPENSE -> "-"; else -> "" }
+    val cardBg = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
 
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clickable(onClick = onClick),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -268,7 +644,13 @@ fun TransactionItem(t: Transaction, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(t.title, fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
-                Text(t.category.label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t.category.label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    if (accountColor != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(accountColor))
+                    }
+                }
                 if (t.description.isNotBlank())
                     Text(t.description, color = MaterialTheme.colorScheme.outline, fontSize = 11.sp, maxLines = 1)
             }
@@ -278,6 +660,18 @@ fun TransactionItem(t: Transaction, onClick: () -> Unit) {
                 Text(JalaliCalendar.toJalaliShort(t.date),
                     color = MaterialTheme.colorScheme.outline, fontSize = 10.sp)
             }
+        }
+    }
+}
+
+@Composable
+private fun WelcomeTip(icon: ImageVector, title: String, body: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp).padding(top = 2.dp))
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text(body, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

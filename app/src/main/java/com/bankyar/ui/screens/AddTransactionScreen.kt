@@ -19,9 +19,13 @@ import androidx.compose.ui.unit.sp
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.data.database.entities.TransactionType
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.viewmodels.AccountsViewModel
+import com.bankyar.ui.viewmodels.BudgetViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
+import com.bankyar.util.JalaliCalendar
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,9 +34,13 @@ fun AddTransactionScreen(
     editId: Int = -1,
     viewModel: TransactionViewModel,
     accountsViewModel: AccountsViewModel,
+    budgetViewModel: BudgetViewModel,
     onBack: () -> Unit
 ) {
-    LaunchedEffect(userId) { accountsViewModel.setUser(userId) }
+    LaunchedEffect(userId) {
+        accountsViewModel.setUser(userId)
+        budgetViewModel.setUser(userId)
+    }
 
     var existing by remember { mutableStateOf<Transaction?>(null) }
     LaunchedEffect(editId) { if (editId > 0) existing = viewModel.getById(editId) }
@@ -42,18 +50,39 @@ fun AddTransactionScreen(
     var type by remember { mutableStateOf(TransactionType.EXPENSE) }
     var category by remember { mutableStateOf(TransactionCategory.OTHER) }
     var description by remember { mutableStateOf("") }
-    var accountName by remember { mutableStateOf("حساب اصلی") }
+    var accountName by remember { mutableStateOf("") }
     var accountDropdownExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showJalaliPicker by remember { mutableStateOf(false) }
+    var showBudgetWarning by remember { mutableStateOf<String?>(null) }
 
     val accounts by accountsViewModel.accounts.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(accounts) {
+        if (editId <= 0 && accountName.isEmpty()) {
+            accountName = accounts.firstOrNull { it.isDefault }?.title
+                ?: accounts.firstOrNull()?.title
+                ?: ""
+        }
+    }
 
     LaunchedEffect(existing) {
         existing?.let {
             title = it.title; amountText = it.amount.toLong().toString()
             type = it.type; category = it.category
             description = it.description; accountName = it.accountName
+            selectedDateMillis = it.date
         }
+    }
+
+    if (showJalaliPicker) {
+        JalaliDatePickerDialog(
+            currentMillis = selectedDateMillis,
+            onConfirm = { millis -> selectedDateMillis = millis; showJalaliPicker = false },
+            onDismiss = { showJalaliPicker = false }
+        )
     }
 
     val isEdit = editId > 0
@@ -61,6 +90,42 @@ fun AddTransactionScreen(
         TransactionType.INCOME -> Color(0xFF2E7D32)
         TransactionType.EXPENSE -> Color(0xFFC62828)
         TransactionType.TRANSFER -> Color(0xFF1565C0)
+    }
+
+    // Extract actual save logic into a local lambda
+    fun doSave() {
+        val amount = amountText.toDoubleOrNull() ?: return
+        error = null
+        val tr = Transaction(
+            id = if (isEdit) editId else 0,
+            userId = userId, title = title, amount = amount,
+            type = type, category = category,
+            description = description, accountName = accountName,
+            date = selectedDateMillis
+        )
+        if (isEdit) viewModel.updateTransaction(tr) else viewModel.addTransaction(tr)
+        onBack()
+    }
+
+    if (showBudgetWarning != null) {
+        AlertDialog(
+            onDismissRequest = { showBudgetWarning = null },
+            icon = { Icon(Icons.Default.Warning, null, tint = Color(0xFFE65100)) },
+            title = { Text("هشدار سقف بودجه", fontWeight = FontWeight.Bold) },
+            text = { Text(showBudgetWarning!!, lineHeight = 22.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBudgetWarning = null
+                        doSave()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("ادامه و ثبت", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ showBudgetWarning = null }) { Text("انصراف") } }
+        )
     }
 
     Scaffold(
@@ -78,9 +143,23 @@ fun AddTransactionScreen(
     ) { padding ->
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+                .padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (accounts.isEmpty() && !isEdit) {
+                Card(
+                    Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+                ) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, null,
+                            tint = Color(0xFFE65100), modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("حسابی ثبت نشده است. لطفاً ابتدا از بخش مدیریت حساب‌ها یک حساب اضافه کنید.",
+                            color = Color(0xFFE65100), fontSize = 13.sp)
+                    }
+                }
+            }
             // Type
             FormCard("نوع تراکنش") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -116,14 +195,12 @@ fun AddTransactionScreen(
                     label = { Text("مبلغ (تومان)") },
                     leadingIcon = { Icon(Icons.Default.AttachMoney, null, tint = typeFg) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = fieldColors(),
                     suffix = { Text("تومان", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 )
-                if (amountText.isNotBlank())
-                    Text("${formatAmount(amountText.toDoubleOrNull() ?: 0.0)} تومان",
-                        color = typeFg, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             }
 
             // Title
@@ -196,10 +273,6 @@ fun AddTransactionScreen(
                         expanded = accountDropdownExpanded,
                         onDismissRequest = { accountDropdownExpanded = false }
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("حساب اصلی") },
-                            onClick = { accountName = "حساب اصلی"; accountDropdownExpanded = false }
-                        )
                         accounts.forEach { acc ->
                             DropdownMenuItem(
                                 text = {
@@ -216,6 +289,25 @@ fun AddTransactionScreen(
                         }
                     }
                 }
+            }
+
+            // Date picker
+            FormCard("تاریخ تراکنش") {
+                OutlinedTextField(
+                    value = JalaliCalendar.toJalaliShort(selectedDateMillis),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("تاریخ") },
+                    leadingIcon = { Icon(Icons.Default.DateRange, null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingIcon = {
+                        IconButton(onClick = { showJalaliPicker = true }) {
+                            Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = fieldColors()
+                )
             }
 
             // Description
@@ -251,14 +343,36 @@ fun AddTransactionScreen(
                         amount == null || amount <= 0 -> error = "مبلغ معتبر وارد کنید"
                         else -> {
                             error = null
-                            val tr = Transaction(
-                                id = if (isEdit) editId else 0,
-                                userId = userId, title = title, amount = amount,
-                                type = type, category = category,
-                                description = description, accountName = accountName
-                            )
-                            if (isEdit) viewModel.updateTransaction(tr) else viewModel.addTransaction(tr)
-                            onBack()
+                            if (type != TransactionType.INCOME) {
+                                // Check budget before saving
+                                scope.launch {
+                                    val currentMonth = budgetViewModel.currentYearMonth()
+                                    val budgetList = budgetViewModel.getBudgetsForMonthDirect(currentMonth)
+                                    val matchingBudget = budgetList.find { b ->
+                                        b.categoryName == category.name &&
+                                        (b.accountName == null || b.accountName == accountName)
+                                    }
+                                    if (matchingBudget != null) {
+                                        val spent = budgetViewModel.getSpentForCategoryDirect(
+                                            category, currentMonth, matchingBudget.accountName
+                                        )
+                                        val accLabel = if (matchingBudget.accountName != null) " (${matchingBudget.accountName})" else ""
+                                        when {
+                                            spent >= matchingBudget.maxAmount -> {
+                                                showBudgetWarning = "سقف بودجه دسته‌بندی «${category.label}»$accLabel تکمیل شده است.\n\nهزینه شده: ${formatAmount(spent)} تومان\nسقف: ${formatAmount(matchingBudget.maxAmount)} تومان\n\nآیا با وجود این، تراکنش را ثبت می‌کنید؟"
+                                                return@launch
+                                            }
+                                            spent + amount > matchingBudget.maxAmount -> {
+                                                showBudgetWarning = "این تراکنش سقف بودجه دسته‌بندی «${category.label}»$accLabel را رد می‌کند.\n\nهزینه شده: ${formatAmount(spent)} تومان\nاین تراکنش: ${formatAmount(amount)} تومان\nسقف: ${formatAmount(matchingBudget.maxAmount)} تومان\n\nآیا ادامه می‌دهید؟"
+                                                return@launch
+                                            }
+                                        }
+                                    }
+                                    doSave()
+                                }
+                            } else {
+                                doSave()
+                            }
                         }
                     }
                 },
@@ -302,4 +416,89 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedLabelColor = MaterialTheme.colorScheme.primary,
     unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
     cursorColor = MaterialTheme.colorScheme.primary,
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun JalaliDatePickerDialog(
+    currentMillis: Long,
+    onConfirm: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val jalali = JalaliCalendar.toJalaliShort(currentMillis)
+    val parts = jalali.split("/")
+    var dayText by remember { mutableStateOf(parts.getOrNull(0) ?: "1") }
+    var selectedMonth by remember { mutableStateOf((parts.getOrNull(1)?.toIntOrNull() ?: 1)) }
+    var yearText by remember { mutableStateOf(parts.getOrNull(2) ?: "1403") }
+    var monthExpanded by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("انتخاب تاریخ شمسی", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = yearText,
+                    onValueChange = { yearText = it.filter { c -> c.isDigit() }.take(4) },
+                    label = { Text("سال") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = fieldColors()
+                )
+                ExposedDropdownMenuBox(expanded = monthExpanded, onExpandedChange = { monthExpanded = it }) {
+                    OutlinedTextField(
+                        value = JalaliCalendar.monthNames[selectedMonth - 1],
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("ماه") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(monthExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = fieldColors()
+                    )
+                    ExposedDropdownMenu(expanded = monthExpanded, onDismissRequest = { monthExpanded = false }) {
+                        JalaliCalendar.monthNames.forEachIndexed { idx, name ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = { selectedMonth = idx + 1; monthExpanded = false }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = dayText,
+                    onValueChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
+                    label = { Text("روز") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = fieldColors()
+                )
+                if (errorMsg.isNotBlank())
+                    Text(errorMsg, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val jy = yearText.toIntOrNull() ?: 0
+                val jm = selectedMonth
+                val jd = dayText.toIntOrNull() ?: 0
+                when {
+                    jy < 1300 || jy > 1500 -> errorMsg = "سال نامعتبر است"
+                    jd < 1 || jd > 31 -> errorMsg = "روز نامعتبر است"
+                    else -> {
+                        errorMsg = ""
+                        onConfirm(JalaliCalendar.jalaliToMillis(jy, jm, jd))
+                    }
+                }
+            }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                Text("تأیید", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("انصراف") } }
+    )
+}

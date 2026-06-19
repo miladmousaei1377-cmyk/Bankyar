@@ -19,6 +19,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.data.database.entities.BankAccount
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
+import com.bankyar.ui.components.formatAmount
 import com.bankyar.ui.theme.*
 import com.bankyar.ui.viewmodels.AccountsViewModel
 
@@ -113,6 +115,8 @@ fun AccountsScreen(
             ) {
                 items(accounts, key = { it.id }) { acc ->
                     AccountCard(acc,
+                        userId = userId,
+                        viewModel = viewModel,
                         onEdit = { editAccount = acc; showDialog = true },
                         onDelete = { deleteTarget = acc }
                     )
@@ -123,7 +127,16 @@ fun AccountsScreen(
 }
 
 @Composable
-private fun AccountCard(acc: BankAccount, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun AccountCard(
+    acc: BankAccount,
+    userId: Int,
+    viewModel: AccountsViewModel,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val txNetBalance by viewModel.getNetBalance(userId, acc.title).collectAsState(initial = 0.0)
+    val netBalance = acc.initialBalance + txNetBalance
+
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -158,6 +171,20 @@ private fun AccountCard(acc: BankAccount, onEdit: () -> Unit, onDelete: () -> Un
                 if (acc.accountNumber.isNotBlank())
                     Text("شماره حساب: ${acc.accountNumber}",
                         color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                // Net balance row
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(if (netBalance >= 0) Color(0xFFE8F5E9) else Color(0xFFFFEBEE))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("موجودی فعلی: ", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text(
+                        "${formatAmount(netBalance)} تومان",
+                        color = if (netBalance >= 0) Color(0xFF2E7D32) else Color(0xFFC62828),
+                        fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                    )
+                }
             }
             IconButton(onEdit) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
             IconButton(onDelete) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
@@ -176,6 +203,7 @@ private fun AccountDialog(
     var bankName by remember { mutableStateOf(account?.bankName ?: "") }
     var cardNumber by remember { mutableStateOf(account?.cardNumber ?: "") }
     var accountNumber by remember { mutableStateOf(account?.accountNumber ?: "") }
+    var initialBalanceText by remember { mutableStateOf(if ((account?.initialBalance ?: 0.0) > 0.0) account!!.initialBalance.toLong().toString() else "") }
     var isDefault by remember { mutableStateOf(account?.isDefault ?: false) }
     var error by remember { mutableStateOf("") }
 
@@ -183,13 +211,18 @@ private fun AccountDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (account == null) "افزودن حساب" else "ویرایش حساب", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.imePadding().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 AccountField("نام حساب (اجباری)", title, { title = it }, Icons.Default.Label)
                 AccountField("نام بانک", bankName, { bankName = it }, Icons.Default.AccountBalance)
                 AccountField("شماره کارت", cardNumber, { cardNumber = it },
                     Icons.Default.CreditCard, KeyboardType.Number)
                 AccountField("شماره حساب", accountNumber, { accountNumber = it },
                     Icons.Default.Numbers, KeyboardType.Number)
+                AccountField("موجودی اولیه (تومان)", initialBalanceText,
+                    { initialBalanceText = it.filter { c -> c.isDigit() } },
+                    Icons.Default.AccountBalanceWallet, KeyboardType.Number,
+                    ThousandSeparatorVisualTransformation())
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isDefault, onCheckedChange = { isDefault = it })
                     Text("حساب پیش‌فرض", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
@@ -208,7 +241,8 @@ private fun AccountDialog(
                     bankName = bankName,
                     cardNumber = cardNumber,
                     accountNumber = accountNumber,
-                    isDefault = isDefault
+                    isDefault = isDefault,
+                    initialBalance = initialBalanceText.toDoubleOrNull() ?: 0.0
                 ))
             }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                 Text("ذخیره", fontWeight = FontWeight.Bold)
@@ -222,18 +256,22 @@ private fun AccountDialog(
 private fun AccountField(
     label: String, value: String, onChange: (String) -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None
 ) {
     OutlinedTextField(
         value = value, onValueChange = onChange, label = { Text(label) },
         leadingIcon = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        visualTransformation = visualTransformation,
         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary,
             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
             focusedTextColor = MaterialTheme.colorScheme.onSurface,
             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
         )
     )
 }

@@ -2,8 +2,11 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, claude/project-updates-features-TMW5P ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -31,14 +34,55 @@ jobs:
           echo "GRADLE_HOME=$GRADLE_HOME" >> $GITHUB_ENV
           echo "$GRADLE_HOME/bin" >> $GITHUB_PATH
 
-      - name: Build Debug APK
-        run: gradle assembleDebug
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > ${{ github.workspace }}/bankyar.jks
+
+      - name: Build Release APK
+        run: gradle assembleRelease
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
+          KEYSTORE_PATH: ${{ github.workspace }}/bankyar.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bankyar-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: bankyar-release
+          path: app/build/outputs/apk/release/app-release.apk
           retention-days: 30
+
+      - name: Delete previous latest release
+        run: |
+          gh release delete latest --yes || true
+          git push origin :refs/tags/latest || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version name
+        id: version
+        run: echo "name=$(grep versionName app/build.gradle.kts | grep -oP '\"[^\"]+\"' | tr -d '\"')" >> $GITHUB_OUTPUT
+
+      - name: Publish latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "بانک‌یار نسخه ${{ steps.version.outputs.name }}"
+          body: |
+            آخرین نسخه بانک‌یار — نصب مستقیم روی اندروید
+
+            **نسخه:** `${{ steps.version.outputs.name }}`
+            **کامیت:** `${{ github.sha }}`
+            **شاخه:** `${{ github.ref_name }}`
+          files: app/build/outputs/apk/release/app-release.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup signing artifacts
+        if: always()
+        run: |
+          rm -f ${{ github.workspace }}/bankyar.jks
+          rm -f ${{ github.workspace }}/keystore.properties

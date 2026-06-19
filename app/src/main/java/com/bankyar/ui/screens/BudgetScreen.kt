@@ -1,8 +1,9 @@
 package com.bankyar.ui.screens
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -12,60 +13,81 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.data.database.entities.BankAccount
+import com.bankyar.data.database.entities.Budget
 import com.bankyar.data.database.entities.TransactionCategory
+import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
 import com.bankyar.ui.components.formatAmount
-import com.bankyar.ui.viewmodels.BudgetItem
+import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.BudgetViewModel
-import com.bankyar.util.JalaliCalendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(
     userId: Int,
     viewModel: BudgetViewModel,
+    accountsViewModel: AccountsViewModel,
     onBack: () -> Unit
 ) {
     LaunchedEffect(userId) { viewModel.setUser(userId) }
 
-    val budgetItems by viewModel.budgetItems.collectAsState()
-    val month by viewModel.month.collectAsState()
-    val year by viewModel.year.collectAsState()
-    val message by viewModel.message.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val currentMonth = remember { viewModel.currentYearMonth() }
+    val budgets by viewModel.getBudgetsForMonth(currentMonth).collectAsState(initial = emptyList())
+    val accounts by accountsViewModel.accounts.collectAsState()
+    var selectedAccount by remember { mutableStateOf<String?>(null) }
 
-    var showAddDialog by remember { mutableStateOf(false) }
-    var editItem by remember { mutableStateOf<BudgetItem?>(null) }
+    var showDialog by remember { mutableStateOf(false) }
+    var editBudget by remember { mutableStateOf<Budget?>(null) }
+    var deleteTarget by remember { mutableStateOf<Budget?>(null) }
 
-    LaunchedEffect(message) {
-        message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
+    if (showDialog) {
+        BudgetDialog(
+            budget = editBudget,
+            yearMonth = currentMonth,
+            accounts = accounts,
+            onDismiss = { showDialog = false; editBudget = null },
+            onSave = { catName, maxAmt, accName ->
+                if (editBudget != null) {
+                    viewModel.updateBudget(editBudget!!.copy(
+                        categoryName = catName,
+                        maxAmount = maxAmt,
+                        accountName = accName
+                    ))
+                } else {
+                    viewModel.saveBudget(userId, catName, maxAmt, currentMonth, accName)
+                }
+                showDialog = false; editBudget = null
+            }
+        )
     }
 
-    if (showAddDialog || editItem != null) {
-        BudgetDialog(
-            userId = userId,
-            month = month,
-            year = year,
-            existing = editItem,
-            usedCategories = budgetItems.map { it.budget.category }.toSet()
-                .let { if (editItem != null) it - editItem!!.budget.category else it },
-            onSave = { category, amount ->
-                viewModel.saveBudget(userId, category, amount, editItem?.budget?.id ?: 0)
-                showAddDialog = false; editItem = null
+    deleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("حذف بودجه") },
+            text = {
+                val cat = TransactionCategory.entries.find { it.name == target.categoryName }
+                Text("آیا از حذف بودجه «${cat?.label ?: target.categoryName}» اطمینان دارید؟")
             },
-            onDismiss = { showAddDialog = false; editItem = null }
+            confirmButton = {
+                TextButton({ viewModel.deleteBudget(target); deleteTarget = null }) {
+                    Text("حذف", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ deleteTarget = null }) { Text("انصراف") } }
         )
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("مدیریت بودجه", fontWeight = FontWeight.Bold) },
+                title = { Text("بودجه‌بندی ماه $currentMonth", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.Default.ArrowBack, null) } },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -75,53 +97,72 @@ fun BudgetScreen(
             )
         },
         floatingActionButton = {
-            if (budgetItems.size < TransactionCategory.entries.size) {
-                FloatingActionButton(
-                    onClick = { showAddDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White
-                ) { Icon(Icons.Default.Add, null) }
-            }
+            FloatingActionButton(
+                onClick = { editBudget = null; showDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.White
+            ) { Icon(Icons.Default.Add, null) }
         }
     ) { padding ->
-        LazyColumn(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        Column(
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding)
         ) {
-            item { MonthNavigator(month, year, viewModel::previousMonth, viewModel::nextMonth) }
+            if (accounts.isNotEmpty()) {
+                LazyRow(
+                    Modifier
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = selectedAccount == null,
+                            onClick = { selectedAccount = null },
+                            label = { Text("همه حساب‌ها", fontSize = 12.sp) }
+                        )
+                    }
+                    items(accounts) { acc ->
+                        FilterChip(
+                            selected = selectedAccount == acc.title,
+                            onClick = { selectedAccount = if (selectedAccount == acc.title) null else acc.title },
+                            label = { Text(acc.title, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
 
-            if (budgetItems.isEmpty()) {
-                item { Spacer(Modifier.height(8.dp)) }
-                item {
-                    Card(
-                        Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(2.dp)
-                    ) {
-                        Column(
-                            Modifier.padding(40.dp).fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(Icons.Default.AccountBalance, null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(56.dp))
-                            Spacer(Modifier.height(12.dp))
-                            Text("هیچ بودجه‌ای تعریف نشده",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
-                            Spacer(Modifier.height(6.dp))
-                            Text("برای این ماه بودجه اضافه کنید",
-                                color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
-                        }
+            val filteredBudgets = if (selectedAccount == null) budgets
+                else budgets.filter { it.accountName == null || it.accountName == selectedAccount }
+
+            if (filteredBudgets.isEmpty()) {
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Savings, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("هیچ بودجه‌ای تعریف نشده", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("روی + بزنید تا بودجه تعریف کنید",
+                            color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
                     }
                 }
             } else {
-                item { BudgetSummaryCard(budgetItems) }
-                items(budgetItems, key = { it.budget.id }) { item ->
-                    BudgetItemCard(
-                        item = item,
-                        onEdit = { editItem = item },
-                        onDelete = { viewModel.deleteBudget(item.budget) }
-                    )
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredBudgets, key = { it.id }) { budget ->
+                        BudgetCard(
+                            budget = budget,
+                            viewModel = viewModel,
+                            yearMonth = currentMonth,
+                            onDelete = { deleteTarget = budget },
+                            onEdit = { editBudget = budget; showDialog = true }
+                        )
+                    }
                 }
             }
         }
@@ -129,90 +170,34 @@ fun BudgetScreen(
 }
 
 @Composable
-private fun MonthNavigator(month: Int, year: Int, onPrev: () -> Unit, onNext: () -> Unit) {
-    val jalaliMonths = arrayOf(
-        "فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور",
-        "مهر","آبان","آذر","دی","بهمن","اسفند"
-    )
-    val (jy, jm, _) = JalaliCalendar.gregorianToJalali(year, month, 1)
-    Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onNext) { Icon(Icons.Default.ChevronLeft, null, tint = MaterialTheme.colorScheme.primary) }
-            Text(
-                "${jalaliMonths[jm - 1]} $jy",
-                fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            IconButton(onPrev) { Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.primary) }
-        }
+private fun BudgetCard(
+    budget: Budget,
+    viewModel: BudgetViewModel,
+    yearMonth: String,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
+) {
+    val category = TransactionCategory.entries.find { it.name == budget.categoryName }
+    val resolvedCategory = category ?: TransactionCategory.OTHER
+    // produceState: immediately loads via suspend then stays reactive via Flow
+    val spent by produceState(initialValue = 0.0, budget.id, yearMonth, budget.accountName) {
+        value = viewModel.getSpentForCategoryDirect(resolvedCategory, yearMonth, budget.accountName)
+        viewModel.getSpentForCategoryAndAccount(resolvedCategory, yearMonth, budget.accountName)
+            .collect { value = it }
     }
-}
 
-@Composable
-private fun BudgetSummaryCard(items: List<BudgetItem>) {
-    val totalLimit = items.sumOf { it.budget.limitAmount }
-    val totalSpent = items.sumOf { it.spent }
-    val progress = if (totalLimit > 0) (totalSpent / totalLimit).toFloat().coerceIn(0f, 1f) else 0f
-    val overBudget = totalSpent > totalLimit
-
-    Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-        elevation = CardDefaults.cardElevation(4.dp)
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text("خلاصه بودجه ماه", color = Color.White.copy(0.8f), fontSize = 13.sp)
-            Spacer(Modifier.height(12.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(10.dp),
-                color = if (overBudget) Color(0xFFEF5350) else Color(0xFF81C784),
-                trackColor = Color.White.copy(0.3f)
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("هزینه شده", color = Color.White.copy(0.7f), fontSize = 11.sp)
-                    Text("${formatAmount(totalSpent)} ت",
-                        color = if (overBudget) Color(0xFFEF9A9A) else Color(0xFF81C784),
-                        fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("بودجه کل", color = Color.White.copy(0.7f), fontSize = 11.sp)
-                    Text("${formatAmount(totalLimit)} ت",
-                        color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
-            }
-            if (overBudget) {
-                Spacer(Modifier.height(8.dp))
-                Text("⚠️ از بودجه ماه فراتر رفته‌اید",
-                    color = Color(0xFFEF9A9A), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BudgetItemCard(item: BudgetItem, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val progress = if (item.budget.limitAmount > 0)
-        (item.spent / item.budget.limitAmount).toFloat().coerceIn(0f, 1f) else 0f
-    val overBudget = item.spent > item.budget.limitAmount
+    val progress = if (budget.maxAmount > 0) (spent / budget.maxAmount).coerceIn(0.0, 1.0).toFloat() else 0f
     val progressColor = when {
-        overBudget -> Color(0xFFEF5350)
-        progress > 0.7f -> Color(0xFFFFB74D)
-        else -> Color(0xFF66BB6A)
+        progress >= 1f -> Color(0xFFC62828)
+        progress >= 0.8f -> Color(0xFFE65100)
+        else -> Color(0xFF2E7D32)
     }
+    val isOverBudget = spent > budget.maxAmount
+    val remaining = budget.maxAmount - spent
 
     Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
@@ -222,42 +207,88 @@ private fun BudgetItemCard(item: BudgetItem, onEdit: () -> Unit, onDelete: () ->
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.budget.category.icon, fontSize = 22.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Box(
+                        Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) { Text(category?.icon ?: "💰", fontSize = 20.sp) }
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text(item.budget.category.label, fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                        Text("${formatAmount(item.spent)} / ${formatAmount(item.budget.limitAmount)} ت",
-                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(category?.label ?: budget.categoryName,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+                            if (isOverBudget) {
+                                Box(
+                                    Modifier.clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFFFFEBEE))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) { Text("از بودجه گذشت!", color = Color(0xFFC62828), fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("سقف: ${formatAmount(budget.maxAmount)} تومان",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            if (budget.accountName != null) {
+                                Box(
+                                    Modifier.clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Text(budget.accountName, color = MaterialTheme.colorScheme.primary, fontSize = 10.sp)
+                                }
+                            }
+                        }
                     }
                 }
-                Row {
-                    IconButton(onEdit, modifier = Modifier.size(32.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Edit, null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onDelete, modifier = Modifier.size(32.dp)) {
+                    Box(
+                        Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFFFEBEE))
+                            .clickable(onClick = onDelete),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(Icons.Default.Delete, null,
-                            tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                            tint = Color(0xFFC62828), modifier = Modifier.size(20.dp))
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(12.dp))
+
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(7.dp),
+                modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
                 color = progressColor,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
-            if (overBudget) {
-                Spacer(Modifier.height(4.dp))
-                Text("${formatAmount(item.spent - item.budget.limitAmount)} ت اضافه هزینه",
-                    color = Color(0xFFEF5350), fontSize = 11.sp)
-            } else {
-                Spacer(Modifier.height(4.dp))
-                Text("${formatAmount(item.budget.limitAmount - item.spent)} ت باقی‌مانده",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("هزینه شده",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("${formatAmount(spent)} تومان",
+                        color = progressColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("درصد مصرف",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("${(progress * 100).toInt()}%",
+                        color = progressColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(if (isOverBudget) "مازاد" else "باقی‌مانده",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("${formatAmount(kotlin.math.abs(remaining))} تومان",
+                        color = if (isOverBudget) Color(0xFFC62828) else Color(0xFF2E7D32),
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -266,87 +297,128 @@ private fun BudgetItemCard(item: BudgetItem, onEdit: () -> Unit, onDelete: () ->
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BudgetDialog(
-    userId: Int,
-    month: Int,
-    year: Int,
-    existing: BudgetItem?,
-    usedCategories: Set<TransactionCategory>,
-    onSave: (TransactionCategory, Double) -> Unit,
-    onDismiss: () -> Unit
+    budget: Budget?,
+    yearMonth: String,
+    accounts: List<BankAccount>,
+    onDismiss: () -> Unit,
+    onSave: (String, Double, String?) -> Unit
 ) {
     var selectedCategory by remember {
-        mutableStateOf(existing?.budget?.category ?: TransactionCategory.entries.first { it !in usedCategories })
+        mutableStateOf(
+            if (budget != null)
+                TransactionCategory.entries.find { it.name == budget.categoryName } ?: TransactionCategory.OTHER
+            else TransactionCategory.OTHER
+        )
     }
-    var amountText by remember {
-        mutableStateOf(existing?.budget?.limitAmount?.let { formatAmount(it) } ?: "")
+    var maxAmountText by remember {
+        mutableStateOf(if (budget != null) budget.maxAmount.toLong().toString() else "")
     }
-    var expandedDropdown by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var selectedAccountName by remember {
+        mutableStateOf(budget?.accountName)
+    }
+    var categoryExpanded by remember { mutableStateOf(false) }
+    var accountExpanded by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (existing == null) "افزودن بودجه" else "ویرایش بودجه",
+            Text(if (budget == null) "تعریف بودجه جدید" else "ویرایش بودجه",
                 fontWeight = FontWeight.Bold)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.imePadding().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                // Category dropdown
                 ExposedDropdownMenuBox(
-                    expanded = expandedDropdown,
-                    onExpandedChange = { if (existing == null) expandedDropdown = it }
+                    expanded = categoryExpanded,
+                    onExpandedChange = { categoryExpanded = it }
                 ) {
                     OutlinedTextField(
                         value = "${selectedCategory.icon} ${selectedCategory.label}",
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("دسته‌بندی") },
-                        trailingIcon = { if (existing == null) ExposedDropdownMenuDefaults.TrailingIcon(expandedDropdown) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = existing == null
+                        shape = RoundedCornerShape(10.dp)
                     )
-                    if (existing == null) {
+                    ExposedDropdownMenu(
+                        expanded = categoryExpanded,
+                        onDismissRequest = { categoryExpanded = false }
+                    ) {
+                        TransactionCategory.entries.forEach { cat ->
+                            DropdownMenuItem(
+                                text = { Text("${cat.icon} ${cat.label}") },
+                                onClick = { selectedCategory = cat; categoryExpanded = false }
+                            )
+                        }
+                    }
+                }
+
+                // Account dropdown
+                if (accounts.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
+                        expanded = accountExpanded,
+                        onExpandedChange = { accountExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedAccountName ?: "همه حساب‌ها",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("حساب بانکی") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(accountExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            shape = RoundedCornerShape(10.dp)
+                        )
                         ExposedDropdownMenu(
-                            expanded = expandedDropdown,
-                            onDismissRequest = { expandedDropdown = false }
+                            expanded = accountExpanded,
+                            onDismissRequest = { accountExpanded = false }
                         ) {
-                            TransactionCategory.entries.filter { it !in usedCategories }.forEach { cat ->
+                            DropdownMenuItem(
+                                text = { Text("همه حساب‌ها") },
+                                onClick = { selectedAccountName = null; accountExpanded = false }
+                            )
+                            accounts.forEach { acc ->
                                 DropdownMenuItem(
-                                    text = { Text("${cat.icon} ${cat.label}") },
-                                    onClick = { selectedCategory = cat; expandedDropdown = false }
+                                    text = { Text(acc.title) },
+                                    onClick = { selectedAccountName = acc.title; accountExpanded = false }
                                 )
                             }
                         }
                     }
                 }
 
+                // Max amount
                 OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it.filter { c -> c.isDigit() }; error = null },
+                    value = maxAmountText,
+                    onValueChange = { maxAmountText = it.filter { c -> c.isDigit() } },
                     label = { Text("سقف بودجه (تومان)") },
-                    leadingIcon = { Text("💰", modifier = Modifier.padding(start = 12.dp)) },
+                    leadingIcon = { Icon(Icons.Default.AttachMoney, null, tint = MaterialTheme.colorScheme.primary) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    isError = error != null,
-                    supportingText = error?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(10.dp),
                     singleLine = true
                 )
+
+                if (error.isNotBlank())
+                    Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull()
-                    if (amount == null || amount <= 0) { error = "مبلغ معتبر وارد کنید"; return@Button }
-                    onSave(selectedCategory, amount)
+                    val amt = maxAmountText.toDoubleOrNull()
+                    when {
+                        amt == null || amt <= 0 -> error = "مبلغ معتبر وارد کنید"
+                        else -> onSave(selectedCategory.name, amt, selectedAccountName)
+                    }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(12.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
         },
-        dismissButton = {
-            TextButton(onDismiss) { Text("انصراف") }
-        }
+        dismissButton = { TextButton(onDismiss) { Text("انصراف") } }
     )
 }

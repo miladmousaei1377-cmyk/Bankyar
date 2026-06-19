@@ -3,6 +3,7 @@ package com.bankyar.ui.screens
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,27 +17,53 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.data.database.entities.TransactionType
-import com.bankyar.ui.viewmodels.DateRange
+import com.bankyar.ui.viewmodels.AccountsViewModel
 import com.bankyar.ui.viewmodels.TransactionViewModel
 import com.bankyar.util.JalaliCalendar
-import java.util.Calendar
+import androidx.compose.foundation.shape.CircleShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
     viewModel: TransactionViewModel,
+    accountsViewModel: AccountsViewModel,
     onBack: () -> Unit,
     onAddTransaction: () -> Unit,
     onTransactionClick: (Int) -> Unit
 ) {
     val transactions by viewModel.transactions.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
-    val dateRange by viewModel.dateRange.collectAsState()
+    val filterCategory by viewModel.filterCategory.collectAsState()
+    val filterMonth by viewModel.filterYearMonth.collectAsState()
+    val filterAccountName by viewModel.filterAccount.collectAsState()
+    val accounts by accountsViewModel.accounts.collectAsState()
     val message by viewModel.message.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var filterType by remember { mutableStateOf<TransactionType?>(null) }
-    var showDateDialog by remember { mutableStateOf(false) }
+    var showFilterPanel by remember { mutableStateOf(false) }
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            title = { Text("حذف همه تراکنش‌ها") },
+            text = { Text("آیا از حذف تمام تراکنش‌ها اطمینان دارید؟ این عملیات قابل بازگشت نیست.") },
+            confirmButton = {
+                TextButton({
+                    viewModel.deleteAllTransactions()
+                    showDeleteAllDialog = false
+                }) {
+                    Text("حذف همه", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = { TextButton({ showDeleteAllDialog = false }) { Text("انصراف") } }
+        )
+    }
+
+    // account name → card color map
+    val accountColorMap = remember(accounts) { accounts.associate { it.title to it.cardColor } }
 
     LaunchedEffect(message) {
         message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
@@ -44,12 +71,12 @@ fun TransactionsScreen(
 
     val filtered = if (filterType == null) transactions else transactions.filter { it.type == filterType }
 
-    if (showDateDialog) {
-        DateRangeDialog(
-            current = dateRange,
-            onApply = { viewModel.setDateRange(it); showDateDialog = false },
-            onDismiss = { showDateDialog = false }
-        )
+    // Collect unique months from transactions
+    val availableMonths = remember(transactions) {
+        transactions.map { t ->
+            val j = JalaliCalendar.toJalaliShort(t.date)
+            j.substring(j.indexOf('/') + 1)
+        }.distinct().sortedDescending()
     }
 
     Scaffold(
@@ -59,10 +86,14 @@ fun TransactionsScreen(
                 title = { Text("همه تراکنش‌ها", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton(onBack) { Icon(Icons.Default.ArrowBack, null) } },
                 actions = {
-                    IconButton({ showDateDialog = true }) {
+                    IconButton({ showDeleteAllDialog = true }) {
+                        Icon(Icons.Default.DeleteSweep, null, tint = Color.White)
+                    }
+                    IconButton({ showFilterPanel = !showFilterPanel }) {
+                        val hasFilter = filterCategory != null || filterMonth != null || filterAccountName != null
                         Icon(
-                            Icons.Default.DateRange, null,
-                            tint = if (dateRange != null) Color(0xFFFFE082) else Color.White
+                            if (hasFilter) Icons.Default.FilterAlt else Icons.Default.FilterList,
+                            null, tint = if (hasFilter) Color.Yellow else Color.White
                         )
                     }
                 },
@@ -103,36 +134,13 @@ fun TransactionsScreen(
                 singleLine = true
             )
 
-            if (dateRange != null) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.DateRange, null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "از ${JalaliCalendar.toJalaliShort(dateRange!!.from)} تا ${JalaliCalendar.toJalaliShort(dateRange!!.to)}",
-                            color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Medium
-                        )
-                    }
-                    IconButton(onClick = { viewModel.setDateRange(null) }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Close, null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(null to "همه", TransactionType.INCOME to "درآمد",
-                    TransactionType.EXPENSE to "هزینه", TransactionType.TRANSFER to "انتقال"
-                ).forEach { (type, label) ->
+            // Type filter chips
+            LazyRow(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(listOf(null to "همه", TransactionType.INCOME to "درآمد",
+                    TransactionType.EXPENSE to "هزینه", TransactionType.TRANSFER to "انتقال")) { (type, label) ->
                     val isSelected = filterType == type
                     val (bg, fg) = when {
                         !isSelected -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
@@ -141,12 +149,91 @@ fun TransactionsScreen(
                         type == TransactionType.TRANSFER -> Color(0xFFE3F2FD) to Color(0xFF1565C0)
                         else -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.primary
                     }
-                    Box(
-                        Modifier.clip(RoundedCornerShape(20.dp)).background(bg)
-                            .clickable { filterType = type }.padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
+                    Box(Modifier.clip(RoundedCornerShape(20.dp)).background(bg)
+                        .clickable { filterType = type }.padding(horizontal = 14.dp, vertical = 8.dp)) {
                         Text(label, color = fg, fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
+                    }
+                }
+            }
+
+            // Advanced filter panel
+            if (showFilterPanel) {
+                Column(
+                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Category filter
+                    Text("دسته‌بندی", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item {
+                            FilterChip(selected = filterCategory == null,
+                                onClick = { viewModel.setFilterCategory(null) },
+                                label = { Text("همه", fontSize = 12.sp) })
+                        }
+                        items(TransactionCategory.entries.toTypedArray()) { cat ->
+                            FilterChip(selected = filterCategory == cat,
+                                onClick = { viewModel.setFilterCategory(if (filterCategory == cat) null else cat) },
+                                label = { Text("${cat.icon} ${cat.label}", fontSize = 12.sp) })
+                        }
+                    }
+
+                    // Month filter
+                    if (availableMonths.isNotEmpty()) {
+                        Text("ماه", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            item {
+                                FilterChip(selected = filterMonth == null,
+                                    onClick = { viewModel.setFilterYearMonth(null) },
+                                    label = { Text("همه ماه‌ها", fontSize = 12.sp) })
+                            }
+                            items(availableMonths) { month ->
+                                FilterChip(selected = filterMonth == month,
+                                    onClick = { viewModel.setFilterYearMonth(if (filterMonth == month) null else month) },
+                                    label = { Text(month, fontSize = 12.sp) })
+                            }
+                        }
+                    }
+
+                    // Account filter
+                    if (accounts.isNotEmpty()) {
+                        Text("حساب", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            item {
+                                FilterChip(selected = filterAccountName == null,
+                                    onClick = { viewModel.setFilterAccount(null) },
+                                    label = { Text("همه حساب‌ها", fontSize = 12.sp) })
+                            }
+                            items(accounts) { acc ->
+                                FilterChip(
+                                    selected = filterAccountName == acc.title,
+                                    onClick = { viewModel.setFilterAccount(if (filterAccountName == acc.title) null else acc.title) },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(acc.title, fontSize = 12.sp)
+                                            val dotColor = accountColorMap[acc.title]
+                                            if (!dotColor.isNullOrBlank()) {
+                                                Spacer(Modifier.width(5.dp))
+                                                val c = try { Color(android.graphics.Color.parseColor(dotColor)) } catch (e: Exception) { null }
+                                                if (c != null) Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(c))
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    if (filterCategory != null || filterMonth != null || filterAccountName != null) {
+                        TextButton(onClick = {
+                            viewModel.setFilterCategory(null)
+                            viewModel.setFilterYearMonth(null)
+                            viewModel.setFilterAccount(null)
+                        }) { Text("پاک کردن فیلترها", color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
                     }
                 }
             }
@@ -168,7 +255,11 @@ fun TransactionsScreen(
             } else {
                 LazyColumn(contentPadding = PaddingValues(bottom = 80.dp)) {
                     items(filtered, key = { it.id }) { t ->
-                        TransactionItem(t, onClick = { onTransactionClick(t.id) })
+                        TransactionItem(
+                            t = t,
+                            accountColor = parseCardColor(accountColorMap[t.accountName]),
+                            onClick = { onTransactionClick(t.id) }
+                        )
                     }
                 }
             }
