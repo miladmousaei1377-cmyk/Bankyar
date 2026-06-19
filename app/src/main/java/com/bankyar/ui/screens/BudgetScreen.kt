@@ -207,7 +207,7 @@ private fun BudgetCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Box(
                         Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
                             .background(MaterialTheme.colorScheme.primaryContainer),
@@ -215,9 +215,18 @@ private fun BudgetCard(
                     ) { Text(category?.icon ?: "💰", fontSize = 20.sp) }
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text(category?.label ?: budget.categoryName,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(category?.label ?: budget.categoryName,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+                            if (isOverBudget) {
+                                Box(
+                                    Modifier.clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFFFFEBEE))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) { Text("از بودجه گذشت!", color = Color(0xFFC62828), fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                            }
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("سقف: ${formatAmount(budget.maxAmount)} تومان",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
@@ -234,14 +243,6 @@ private fun BudgetCard(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isOverBudget) {
-                        Box(
-                            Modifier.clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFFFEBEE))
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
-                        ) { Text("از بودجه گذشت!", color = Color(0xFFC62828), fontSize = 10.sp, fontWeight = FontWeight.Bold) }
-                        Spacer(Modifier.width(4.dp))
-                    }
                     IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Edit, null,
                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
