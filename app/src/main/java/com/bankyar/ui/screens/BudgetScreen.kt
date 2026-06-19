@@ -242,13 +242,18 @@ private fun BudgetCard(
                         ) { Text("از بودجه گذشت!", color = Color(0xFFC62828), fontSize = 10.sp, fontWeight = FontWeight.Bold) }
                         Spacer(Modifier.width(4.dp))
                     }
-                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Edit, null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Box(
+                        Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFFFEBEE))
+                            .clickable(onClick = onDelete),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(Icons.Default.Delete, null,
-                            tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                            tint = Color(0xFFC62828), modifier = Modifier.size(20.dp))
                     }
                 }
             }

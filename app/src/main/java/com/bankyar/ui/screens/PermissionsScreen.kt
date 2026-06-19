@@ -33,6 +33,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { PreferencesManager(context) }
     val scope = rememberCoroutineScope()
+    val smsAutoRegisterEnabled by prefs.smsAutoRegisterEnabled.collectAsState(initial = false)
 
     var smsGranted by remember {
         val receive = ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
@@ -132,48 +133,95 @@ fun PermissionsScreen(onContinue: () -> Unit) {
 
         Spacer(Modifier.height(4.dp))
 
-        if (smsGranted) {
-            // Permission already granted — show confirmation
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF2E7D32).copy(alpha = 0.1f))
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+        // SMS auto-register toggle card
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("تنظیمات ثبت خودکار", fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("فعال‌سازی پیامک بانکی",
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                        Text("تراکنش‌های بانکی از پیامک شناسایی شوند",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = smsAutoRegisterEnabled,
+                        onCheckedChange = { enabled ->
+                            if (enabled && !smsGranted) {
+                                permLauncher.launch(
+                                    arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS)
+                                )
+                            } else {
+                                scope.launch { prefs.setSmsAutoRegisterEnabled(enabled) }
+                            }
+                        }
+                    )
+                }
+
+                if (smsGranted && smsAutoRegisterEnabled) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF2E7D32).copy(alpha = 0.1f)).padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                        Text("ثبت خودکار پیامک بانکی فعال است",
+                            color = Color(0xFF2E7D32), fontSize = 12.sp)
+                    }
+                } else if (!smsGranted && smsAutoRegisterEnabled) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFE65100).copy(alpha = 0.1f)).padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Warning, null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
+                        Text("دسترسی پیامک لازم است — دکمه زیر را بزنید",
+                            color = Color(0xFFE65100), fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        if (!smsGranted) {
+            Button(
+                onClick = {
+                    permLauncher.launch(
+                        arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(22.dp))
-                Text(
-                    "دسترسی پیامک اعطا شد — قابلیت ثبت خودکار فعال است.",
-                    color = Color(0xFF2E7D32), fontSize = 13.sp
-                )
+                Icon(Icons.Default.Sms, null, tint = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("اعطای دسترسی پیامک", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
             }
         }
 
         Button(
-            onClick = {
-                if (!smsGranted) {
-                    permLauncher.launch(
-                        arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS)
-                    )
-                } else {
-                    proceed()
-                }
-            },
+            onClick = { proceed() },
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
-            Icon(
-                if (smsGranted) Icons.Default.ArrowForward else Icons.Default.Sms,
-                null, tint = Color.White
-            )
+            Icon(Icons.Default.ArrowForward, null, tint = Color.White)
             Spacer(Modifier.width(8.dp))
-            Text(
-                if (smsGranted) "ادامه" else "اعطای دسترسی پیامک",
-                fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp
-            )
+            Text("ادامه", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
         }
 
         TextButton(onClick = { proceed() }) {
