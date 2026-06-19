@@ -25,7 +25,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.R
@@ -580,7 +582,12 @@ private fun AccountBalanceCard(acc: BankAccount, userId: Int, accountsViewModel:
 
             if (acc.cardNumber.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
-                Text(maskCardNumber(acc.cardNumber), color = Color.White.copy(0.8f), fontSize = 13.sp)
+                Text(
+                    maskCardNumber(acc.cardNumber),
+                    color = Color.White.copy(0.8f),
+                    fontSize = 13.sp,
+                    style = TextStyle(textDirection = TextDirection.Ltr)
+                )
             }
 
             Spacer(Modifier.height(14.dp))

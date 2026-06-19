@@ -22,9 +22,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 class SmsReceiver : BroadcastReceiver() {
+
+    companion object {
+        private val notifIdCounter = java.util.concurrent.atomic.AtomicInteger(
+            (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+        )
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
@@ -35,7 +40,18 @@ class SmsReceiver : BroadcastReceiver() {
         val sender = messages[0].originatingAddress ?: return
         val body = messages.joinToString("") { it.messageBody }
 
-        val parsed = SmsParser.parse(sender, body) ?: return
+        // Try to parse one transaction per message body
+        val parsedList = mutableListOf<ParsedSmsTransaction>()
+        SmsParser.parse(sender, body)?.let { parsedList.add(it) }
+
+        // If multi-part SMS segments each contain a distinct transaction, parse individually too
+        if (messages.size > 1 && parsedList.isEmpty()) {
+            messages.forEach { msg ->
+                SmsParser.parse(sender, msg.messageBody)?.let { parsedList.add(it) }
+            }
+        }
+
+        if (parsedList.isEmpty()) return
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -50,12 +66,13 @@ class SmsReceiver : BroadcastReceiver() {
                 val db = AppDatabase.getInstance(context)
                 val accountRepo = BankAccountRepository(db.bankAccountDao())
 
-                val matchedAccount = parsed.cardLastDigits?.let {
-                    accountRepo.findByCardLastFour(userId, it)
+                parsedList.forEach { parsed ->
+                    val matchedAccount = parsed.cardLastDigits?.let {
+                        accountRepo.findByCardLastFour(userId, it)
+                    }
+                    val accountName = matchedAccount?.title ?: ""
+                    showTransactionNotification(context, parsed, accountName, userId)
                 }
-                val accountName = matchedAccount?.title ?: ""
-
-                showTransactionNotification(context, parsed, accountName, userId)
             } finally {
                 pendingResult.finish()
             }
@@ -75,8 +92,12 @@ class SmsReceiver : BroadcastReceiver() {
             ) return
         }
 
-        val notifId = abs(parsed.timestamp.toInt())
-        val typeLabel = if (parsed.type == TransactionType.INCOME) "واریز" else "برداشت"
+        val notifId = notifIdCounter.incrementAndGet()
+        val typeLabel = when (parsed.type) {
+            TransactionType.INCOME -> "واریز"
+            TransactionType.TRANSFER -> "انتقال"
+            else -> "برداشت"
+        }
         val amountText = "${formatAmount(parsed.amount)} تومان"
         val accountLabel = if (accountName.isNotBlank()) " — $accountName" else ""
 

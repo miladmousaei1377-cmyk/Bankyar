@@ -38,6 +38,11 @@ fun AccountStatementScreen(
 ) {
     LaunchedEffect(userId) {
         viewModel.setUser(userId)
+        // Clear any active filters so all transactions for this account are visible
+        viewModel.setFilterAccount(null)
+        viewModel.setFilterCategory(null)
+        viewModel.setFilterYearMonth(null)
+        viewModel.setSearchQuery("")
         accountsViewModel.setUser(userId)
     }
 

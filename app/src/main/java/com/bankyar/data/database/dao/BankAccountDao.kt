@@ -26,4 +26,7 @@ interface BankAccountDao {
 
     @Query("SELECT * FROM bank_accounts WHERE userId = :userId AND cardNumber LIKE :pattern LIMIT 1")
     suspend fun findByCardLastFour(userId: Int, pattern: String): BankAccount?
+
+    @Query("DELETE FROM bank_accounts WHERE userId = :userId")
+    suspend fun deleteAllByUser(userId: Int)
 }

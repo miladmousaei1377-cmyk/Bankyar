@@ -58,6 +58,21 @@ fun SettingsScreen(
 
     var autoBackupEnabled by remember { mutableStateOf(false) }
     var lastAutoBackupTime by remember { mutableStateOf("") }
+    val smsAutoRegisterEnabled by prefs.smsAutoRegisterEnabled.collectAsState(initial = false)
+
+    val smsPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results.values.all { it }
+        scope.launch {
+            if (granted) {
+                prefs.setSmsAutoRegisterEnabled(true)
+                snackbarHostState.showSnackbar("ثبت خودکار پیامک فعال شد")
+            } else {
+                snackbarHostState.showSnackbar("دسترسی به پیامک داده نشد")
+            }
+        }
+    }
 
     val reminderEnabled by prefs.reminderEnabled.collectAsState(initial = false)
     val reminderHour by prefs.reminderHour.collectAsState(initial = 20)
@@ -341,6 +356,68 @@ fun SettingsScreen(
                 }
             }
 
+            // SMS auto-register card
+            SettingsCard(title = "پیامک بانکی") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Sms, null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("ثبت خودکار از پیامک",
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    if (smsAutoRegisterEnabled) "فعال — تراکنش‌های بانکی شناسایی می‌شوند"
+                                    else "غیرفعال",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = smsAutoRegisterEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    val perms = arrayOf(
+                                        Manifest.permission.RECEIVE_SMS,
+                                        Manifest.permission.READ_SMS
+                                    )
+                                    val allGranted = perms.all {
+                                        ContextCompat.checkSelfPermission(context, it) ==
+                                            PackageManager.PERMISSION_GRANTED
+                                    }
+                                    if (allGranted) {
+                                        scope.launch {
+                                            prefs.setSmsAutoRegisterEnabled(true)
+                                            snackbarHostState.showSnackbar("ثبت خودکار پیامک فعال شد")
+                                        }
+                                    } else {
+                                        smsPermLauncher.launch(perms)
+                                    }
+                                } else {
+                                    scope.launch {
+                                        prefs.setSmsAutoRegisterEnabled(false)
+                                        snackbarHostState.showSnackbar("ثبت خودکار پیامک غیرفعال شد")
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    Text(
+                        "پس از دریافت پیامک بانکی، تراکنش جهت تأیید نمایش داده می‌شود",
+                        color = MaterialTheme.colorScheme.outline,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
             // Auto backup card
             SettingsCard(title = "پشتیبان‌گیری خودکار") {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -442,6 +519,8 @@ private suspend fun restoreFromJson(context: android.content.Context, userId: In
             )
         )
     }
+
+    db.bankAccountDao().deleteAllByUser(userId)
 
     val accArray = root.getJSONArray("accounts")
     for (i in 0 until accArray.length()) {
