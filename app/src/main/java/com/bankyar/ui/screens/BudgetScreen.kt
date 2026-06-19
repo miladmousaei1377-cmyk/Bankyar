@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.Budget
 import com.bankyar.data.database.entities.TransactionCategory
 import com.bankyar.ui.components.ThousandSeparatorVisualTransformation
@@ -48,14 +49,18 @@ fun BudgetScreen(
     if (showDialog) {
         BudgetDialog(
             budget = editBudget,
-            userId = userId,
             yearMonth = currentMonth,
+            accounts = accounts,
             onDismiss = { showDialog = false; editBudget = null },
-            onSave = { catName, maxAmt ->
+            onSave = { catName, maxAmt, accName ->
                 if (editBudget != null) {
-                    viewModel.updateBudget(editBudget!!.copy(categoryName = catName, maxAmount = maxAmt))
+                    viewModel.updateBudget(editBudget!!.copy(
+                        categoryName = catName,
+                        maxAmount = maxAmt,
+                        accountName = accName
+                    ))
                 } else {
-                    viewModel.saveBudget(userId, catName, maxAmt, currentMonth)
+                    viewModel.saveBudget(userId, catName, maxAmt, currentMonth, accName)
                 }
                 showDialog = false; editBudget = null
             }
@@ -102,7 +107,6 @@ fun BudgetScreen(
         Column(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding)
         ) {
-            // Account filter row
             if (accounts.isNotEmpty()) {
                 LazyRow(
                     Modifier
@@ -127,7 +131,10 @@ fun BudgetScreen(
                 }
             }
 
-            if (budgets.isEmpty()) {
+            val filteredBudgets = if (selectedAccount == null) budgets
+                else budgets.filter { it.accountName == null || it.accountName == selectedAccount }
+
+            if (filteredBudgets.isEmpty()) {
                 Box(
                     Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -147,13 +154,11 @@ fun BudgetScreen(
                     contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 80.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(budgets, key = { it.id }) { budget ->
+                    items(filteredBudgets, key = { it.id }) { budget ->
                         BudgetCard(
                             budget = budget,
-                            userId = userId,
                             viewModel = viewModel,
                             yearMonth = currentMonth,
-                            selectedAccount = selectedAccount,
                             onDelete = { deleteTarget = budget },
                             onEdit = { editBudget = budget; showDialog = true }
                         )
@@ -167,16 +172,14 @@ fun BudgetScreen(
 @Composable
 private fun BudgetCard(
     budget: Budget,
-    userId: Int,
     viewModel: BudgetViewModel,
     yearMonth: String,
-    selectedAccount: String?,
     onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
     val category = TransactionCategory.entries.find { it.name == budget.categoryName }
     val spent by viewModel.getSpentForCategoryAndAccount(
-        category ?: TransactionCategory.OTHER, yearMonth, selectedAccount
+        category ?: TransactionCategory.OTHER, yearMonth, budget.accountName
     ).collectAsState(initial = 0.0)
 
     val progress = if (budget.maxAmount > 0) (spent / budget.maxAmount).coerceIn(0.0, 1.0).toFloat() else 0f
@@ -186,6 +189,7 @@ private fun BudgetCard(
         else -> Color(0xFF2E7D32)
     }
     val isOverBudget = spent > budget.maxAmount
+    val remaining = budget.maxAmount - spent
 
     Card(
         Modifier.fillMaxWidth(),
@@ -210,8 +214,19 @@ private fun BudgetCard(
                         Text(category?.label ?: budget.categoryName,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
-                        Text("سقف: ${formatAmount(budget.maxAmount)} تومان",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("سقف: ${formatAmount(budget.maxAmount)} تومان",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            if (budget.accountName != null) {
+                                Box(
+                                    Modifier.clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Text(budget.accountName, color = MaterialTheme.colorScheme.primary, fontSize = 10.sp)
+                                }
+                            }
+                        }
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -243,12 +258,27 @@ private fun BudgetCard(
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("هزینه شده: ${formatAmount(spent)} ت",
-                    color = progressColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                Text("${(progress * 100).toInt()}%",
-                    color = progressColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Column {
+                    Text("هزینه شده",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("${formatAmount(spent)} تومان",
+                        color = progressColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("درصد مصرف",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("${(progress * 100).toInt()}%",
+                        color = progressColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(if (isOverBudget) "مازاد" else "باقی‌مانده",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("${formatAmount(kotlin.math.abs(remaining))} تومان",
+                        color = if (isOverBudget) Color(0xFFC62828) else Color(0xFF2E7D32),
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -258,10 +288,10 @@ private fun BudgetCard(
 @Composable
 private fun BudgetDialog(
     budget: Budget?,
-    userId: Int,
     yearMonth: String,
+    accounts: List<BankAccount>,
     onDismiss: () -> Unit,
-    onSave: (String, Double) -> Unit
+    onSave: (String, Double, String?) -> Unit
 ) {
     var selectedCategory by remember {
         mutableStateOf(
@@ -273,7 +303,11 @@ private fun BudgetDialog(
     var maxAmountText by remember {
         mutableStateOf(if (budget != null) budget.maxAmount.toLong().toString() else "")
     }
+    var selectedAccountName by remember {
+        mutableStateOf(budget?.accountName)
+    }
     var categoryExpanded by remember { mutableStateOf(false) }
+    var accountExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -285,6 +319,7 @@ private fun BudgetDialog(
         text = {
             Column(Modifier.imePadding().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
                 // Category dropdown
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,
@@ -312,6 +347,39 @@ private fun BudgetDialog(
                     }
                 }
 
+                // Account dropdown
+                if (accounts.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
+                        expanded = accountExpanded,
+                        onExpandedChange = { accountExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedAccountName ?: "همه حساب‌ها",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("حساب بانکی") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(accountExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = accountExpanded,
+                            onDismissRequest = { accountExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("همه حساب‌ها") },
+                                onClick = { selectedAccountName = null; accountExpanded = false }
+                            )
+                            accounts.forEach { acc ->
+                                DropdownMenuItem(
+                                    text = { Text(acc.title) },
+                                    onClick = { selectedAccountName = acc.title; accountExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Max amount
                 OutlinedTextField(
                     value = maxAmountText,
@@ -335,7 +403,7 @@ private fun BudgetDialog(
                     val amt = maxAmountText.toDoubleOrNull()
                     when {
                         amt == null || amt <= 0 -> error = "مبلغ معتبر وارد کنید"
-                        else -> onSave(selectedCategory.name, amt)
+                        else -> onSave(selectedCategory.name, amt, selectedAccountName)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)

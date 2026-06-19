@@ -349,11 +349,17 @@ fun AddTransactionScreen(
                                 scope.launch {
                                     val currentMonth = budgetViewModel.currentYearMonth()
                                     val budgetList = budgetViewModel.getBudgetsForMonth(currentMonth).first()
-                                    val matchingBudget = budgetList.find { it.categoryName == category.name }
+                                    val matchingBudget = budgetList.find { b ->
+                                        b.categoryName == category.name &&
+                                        (b.accountName == null || b.accountName == accountName)
+                                    }
                                     if (matchingBudget != null) {
-                                        val spent = budgetViewModel.getSpentForCategory(category, currentMonth).first()
+                                        val spent = budgetViewModel.getSpentForCategoryAndAccount(
+                                            category, currentMonth, matchingBudget.accountName
+                                        ).first()
                                         if (spent + amount > matchingBudget.maxAmount) {
-                                            showBudgetWarning = "سقف بودجه دسته‌بندی ${category.label} (${formatAmount(matchingBudget.maxAmount)} تومان) در حال رد شدن است. آیا ادامه می‌دهید؟"
+                                            val accLabel = if (matchingBudget.accountName != null) " (${matchingBudget.accountName})" else ""
+                                            showBudgetWarning = "سقف بودجه دسته‌بندی ${category.label}$accLabel (${formatAmount(matchingBudget.maxAmount)} تومان) در حال رد شدن است.\n\nآیا ادامه می‌دهید؟"
                                             return@launch
                                         }
                                     }

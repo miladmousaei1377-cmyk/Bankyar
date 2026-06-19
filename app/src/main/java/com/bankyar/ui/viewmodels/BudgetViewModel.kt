@@ -60,13 +60,14 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    fun saveBudget(userId: Int, categoryName: String, maxAmount: Double, yearMonth: String) =
+    fun saveBudget(userId: Int, categoryName: String, maxAmount: Double, yearMonth: String, accountName: String? = null) =
         viewModelScope.launch {
             db.budgetDao().insert(Budget(
                 userId = userId,
                 categoryName = categoryName,
                 maxAmount = maxAmount,
-                yearMonth = yearMonth
+                yearMonth = yearMonth,
+                accountName = accountName
             ))
         }
 
