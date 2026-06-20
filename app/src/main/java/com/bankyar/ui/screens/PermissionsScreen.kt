@@ -81,6 +81,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
     fun proceed() {
         scope.launch {
             prefs.markPermissionScreenSeen()
+            prefs.markWelcomeSeen()
             onContinue()
         }
     }
@@ -97,7 +98,9 @@ fun PermissionsScreen(onContinue: () -> Unit) {
                 .fillMaxWidth()
         ) { page ->
             when (page) {
-                0 -> WelcomeSlide()
+                0 -> WelcomeSlide(onNext = {
+                    scope.launch { pagerState.animateScrollToPage(1) }
+                })
                 1 -> SettingsSlide(
                     smsGranted = smsGranted,
                     smsAutoRegisterEnabled = smsAutoRegisterEnabled,
@@ -147,7 +150,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
 }
 
 @Composable
-private fun WelcomeSlide() {
+private fun WelcomeSlide(onNext: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
@@ -224,12 +227,16 @@ private fun WelcomeSlide() {
 
         Spacer(Modifier.height(8.dp))
 
-        Text(
-            "برای ادامه، به صفحه بعد بروید ↓",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.outline,
-            textAlign = TextAlign.Center
-        )
+        Button(
+            onClick = onNext,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
+            Icon(Icons.Default.ArrowForward, null, tint = Color.White)
+            Spacer(Modifier.width(8.dp))
+            Text("بعدی", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+        }
     }
 }
 

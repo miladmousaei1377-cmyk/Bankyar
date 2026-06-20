@@ -31,7 +31,6 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bankyar.R
-import com.bankyar.data.PreferencesManager
 import com.bankyar.data.database.entities.BankAccount
 import com.bankyar.data.database.entities.Transaction
 import com.bankyar.data.database.entities.TransactionType
@@ -77,75 +76,7 @@ fun HomeScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    val prefs = remember { PreferencesManager(context) }
-    val hasSeenWelcome by prefs.hasSeenWelcome.collectAsState(initial = true)
-    var showWelcomeDialog by remember { mutableStateOf(false) }
-    var showBackupSuggestionDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(hasSeenWelcome) {
-        if (!hasSeenWelcome) showWelcomeDialog = true
-    }
-    if (showWelcomeDialog) {
-        AlertDialog(
-            onDismissRequest = {},
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("خوش آمدید به بانک‌یار", fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    WelcomeTip(Icons.Default.Settings, "تنظیمات اثر انگشت",
-                        "برای فعال‌سازی ورود با اثر انگشت به صفحه تنظیمات بروید.")
-                    WelcomeTip(Icons.Default.Backup, "پشتیبان‌گیری خودکار",
-                        "پشتیبان‌گیری خودکار هر ۳۰ دقیقه در تنظیمات قابل فعال‌سازی است.")
-                    WelcomeTip(Icons.Default.AccountBalance, "مدیریت حساب‌ها",
-                        "از منوی کشویی گزینه «حساب‌های بانکی» را انتخاب کنید تا حساب‌های خود را مدیریت کنید.")
-                    WelcomeTip(Icons.Default.NotificationsActive, "یادآور ثبت تراکنش",
-                        "از بخش تنظیمات می‌توانید یادآور روزانه فعال کنید تا هر روز در ساعت دلخواه نوتیفیکیشن دریافت کنید.")
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showWelcomeDialog = false
-                    showBackupSuggestionDialog = true
-                    scope.launch { prefs.markWelcomeSeen() }
-                }) {
-                    Text("متوجه شدم")
-                }
-            }
-        )
-    }
-    if (showBackupSuggestionDialog) {
-        AlertDialog(
-            onDismissRequest = { showBackupSuggestionDialog = false },
-            icon = { Icon(Icons.Default.Backup, null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("پشتیبان‌گیری خودکار", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "برای محافظت از اطلاعات مالی خود، پیشنهاد می‌شود پشتیبان‌گیری خودکار را فعال کنید. " +
-                    "فایل بکاپ در پوشه Download/Bankyar ذخیره می‌شود.",
-                    fontSize = 14.sp,
-                    lineHeight = 22.sp
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showBackupSuggestionDialog = false
-                    onSettings()
-                }) {
-                    Text("تنظیمات", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBackupSuggestionDialog = false }) {
-                    Text("بعداً")
-                }
-            }
-        )
-    }
-    var selectionMode by remember { mutableStateOf(false) }
+var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<Int>()) }
 
     LaunchedEffect(message) {
@@ -660,14 +591,3 @@ fun TransactionItem(
     }
 }
 
-@Composable
-private fun WelcomeTip(icon: ImageVector, title: String, body: String) {
-    Row(verticalAlignment = Alignment.Top) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp).padding(top = 2.dp))
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            Text(body, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
