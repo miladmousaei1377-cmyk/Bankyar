@@ -84,21 +84,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS budgets (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        userId INTEGER NOT NULL,
-                        category TEXT NOT NULL,
-                        limitAmount REAL NOT NULL,
-                        month INTEGER NOT NULL,
-                        year INTEGER NOT NULL
-                    )
-                """)
-            }
-        }
-
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(context, AppDatabase::class.java, "bankyar.db")

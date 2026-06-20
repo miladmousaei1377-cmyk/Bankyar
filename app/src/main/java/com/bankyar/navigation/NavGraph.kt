@@ -33,7 +33,6 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
     object Accounts : Screen("accounts")
     object Reports : Screen("reports")
-    object Budget : Screen("budget")
     object About : Screen("about")
     object Settings : Screen("settings")
     object Budget : Screen("budget")
@@ -162,7 +161,6 @@ fun BankYarNavGraph() {
                     onProfile = { navController.navigate(Screen.Profile.route) },
                     onAccounts = { navController.navigate(Screen.Accounts.route) },
                     onReports = { navController.navigate(Screen.Reports.route) },
-                    onBudget = { navController.navigate(Screen.Budget.route) },
                     onAbout = { navController.navigate(Screen.About.route) },
                     onSettings = { navController.navigate(Screen.Settings.route) },
                     onBudget = { navController.navigate(Screen.Budget.route) },
@@ -251,14 +249,6 @@ fun BankYarNavGraph() {
                 accountName = back.arguments?.getString("accountName") ?: return@composable,
                 viewModel = transactionViewModel,
                 accountsViewModel = accountsViewModel,
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.Budget.route) {
-            BudgetScreen(
-                userId = loggedInUserId,
-                viewModel = budgetViewModel,
                 onBack = { navController.popBackStack() }
             )
         }

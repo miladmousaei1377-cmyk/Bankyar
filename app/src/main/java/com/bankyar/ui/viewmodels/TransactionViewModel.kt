@@ -35,14 +35,12 @@ class TransactionViewModel(app: Application) : AndroidViewModel(app) {
     private val _filterYearMonth = MutableStateFlow<String?>(null)
     private val _filterAccount = MutableStateFlow<String?>(null)
     private val _message = MutableStateFlow<String?>(null)
-    private val _dateRange = MutableStateFlow<DateRange?>(null)
 
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     val filterCategory: StateFlow<TransactionCategory?> = _filterCategory.asStateFlow()
     val filterYearMonth: StateFlow<String?> = _filterYearMonth.asStateFlow()
     val filterAccount: StateFlow<String?> = _filterAccount.asStateFlow()
     val message: StateFlow<String?> = _message.asStateFlow()
-    val dateRange: StateFlow<DateRange?> = _dateRange.asStateFlow()
 
     val transactions: StateFlow<List<Transaction>> = combine(
         combine(_userId, _searchQuery, _filterCategory) { uid, q, cat -> Triple(uid, q, cat) },
