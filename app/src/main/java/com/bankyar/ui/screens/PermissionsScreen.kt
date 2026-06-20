@@ -35,6 +35,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.bankyar.BuildConfig
 import com.bankyar.R
 import com.bankyar.data.PreferencesManager
 import com.bankyar.util.BackupWorker
@@ -80,7 +81,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
 
     fun proceed() {
         scope.launch {
-            prefs.markPermissionScreenSeen()
+            prefs.setOnboardingSlidesSeenVersion(BuildConfig.VERSION_CODE)
             prefs.markWelcomeSeen()
             onContinue()
         }

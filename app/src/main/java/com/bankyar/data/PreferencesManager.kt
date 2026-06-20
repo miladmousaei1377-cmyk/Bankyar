@@ -24,6 +24,7 @@ class PreferencesManager(private val context: Context) {
         private val BACKUP_SUGGESTION_SHOWN = booleanPreferencesKey("backup_suggestion_shown")
         private val HAS_SEEN_PERMISSION_SCREEN = booleanPreferencesKey("has_seen_permission_screen")
         private val SMS_AUTO_REGISTER_ENABLED = booleanPreferencesKey("sms_auto_register_enabled")
+        private val ONBOARDING_SLIDES_SEEN_VERSION = intPreferencesKey("onboarding_slides_seen_version")
     }
 
     val loggedInUserId: Flow<Int> = context.dataStore.data.map { it[LOGGED_IN_USER_ID] ?: -1 }
@@ -37,6 +38,7 @@ class PreferencesManager(private val context: Context) {
     val backupSuggestionShown: Flow<Boolean> = context.dataStore.data.map { it[BACKUP_SUGGESTION_SHOWN] ?: false }
     val hasSeenPermissionScreen: Flow<Boolean> = context.dataStore.data.map { it[HAS_SEEN_PERMISSION_SCREEN] ?: false }
     val smsAutoRegisterEnabled: Flow<Boolean> = context.dataStore.data.map { it[SMS_AUTO_REGISTER_ENABLED] ?: false }
+    val onboardingSlidesSeenVersion: Flow<Int> = context.dataStore.data.map { it[ONBOARDING_SLIDES_SEEN_VERSION] ?: 0 }
 
     suspend fun saveUserId(id: Int) { context.dataStore.edit { it[LOGGED_IN_USER_ID] = id } }
     suspend fun clearUserId() { context.dataStore.edit { it.remove(LOGGED_IN_USER_ID) } }
@@ -51,4 +53,5 @@ class PreferencesManager(private val context: Context) {
     suspend fun markBackupSuggestionShown() { context.dataStore.edit { it[BACKUP_SUGGESTION_SHOWN] = true } }
     suspend fun markPermissionScreenSeen() { context.dataStore.edit { it[HAS_SEEN_PERMISSION_SCREEN] = true } }
     suspend fun setSmsAutoRegisterEnabled(enabled: Boolean) { context.dataStore.edit { it[SMS_AUTO_REGISTER_ENABLED] = enabled } }
+    suspend fun setOnboardingSlidesSeenVersion(version: Int) { context.dataStore.edit { it[ONBOARDING_SLIDES_SEEN_VERSION] = version } }
 }
