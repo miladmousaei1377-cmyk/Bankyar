@@ -388,7 +388,7 @@ private fun SettingsSlide(
                 }
 
                 Text(
-                    "هر ساعت یک فایل پشتیبان از داده‌های شما در پوشه Downloads دستگاه ذخیره می‌شود.",
+                    "هر ساعت یک فایل پشتیبان از داده‌های شما در پوشه Download دستگاه ذخیره می‌شود.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 19.sp
@@ -407,7 +407,7 @@ private fun SettingsSlide(
                             fontSize = 13.sp
                         )
                         Text(
-                            "پشتیبان هر ساعت در Downloads",
+                            "پشتیبان هر ساعت در Download",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
                         )
