@@ -57,45 +57,45 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         private fun writeViaMediaStore(context: Context, json: String) {
             val resolver = context.contentResolver
             val relPath = "Download/$BACKUP_FOLDER/"
+            val baseName = AUTO_BACKUP_FILE_NAME.removeSuffix(".json")
 
-            // Query for an existing entry to overwrite in place
-            val existingUri = resolver.query(
+            // Delete ALL existing backup files (including renamed duplicates like "auto_backup (1).json")
+            // Query with LIKE to tolerate path variations across OEMs/Android versions
+            val idsToDelete = mutableListOf<Long>()
+            resolver.query(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                 arrayOf(MediaStore.MediaColumns._ID),
-                "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?",
-                arrayOf(relPath, AUTO_BACKUP_FILE_NAME),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                arrayOf("$baseName%.json", "%$BACKUP_FOLDER%"),
                 null
             )?.use { cursor ->
-                if (cursor.moveToFirst())
-                    ContentUris.withAppendedId(
-                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                        cursor.getLong(0)
-                    )
-                else null
+                while (cursor.moveToNext()) idsToDelete.add(cursor.getLong(0))
+            }
+            idsToDelete.forEach { id ->
+                resolver.delete(
+                    ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id),
+                    null, null
+                )
             }
 
-            if (existingUri != null) {
-                resolver.openOutputStream(existingUri, "wt")?.use { it.write(json.toByteArray()) }
-                    ?: throw IOException("openOutputStream returned null for $existingUri")
-            } else {
-                val cv = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, AUTO_BACKUP_FILE_NAME)
-                    put(MediaStore.Downloads.MIME_TYPE, "application/json")
-                    put(MediaStore.Downloads.RELATIVE_PATH, relPath)
-                    put(MediaStore.MediaColumns.IS_PENDING, 1)
-                }
-                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
-                    ?: throw IOException("MediaStore insert returned null")
-                try {
-                    resolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                        ?: throw IOException("openOutputStream returned null for $uri")
-                    resolver.update(uri, ContentValues().apply {
-                        put(MediaStore.MediaColumns.IS_PENDING, 0)
-                    }, null, null)
-                } catch (e: Exception) {
-                    resolver.delete(uri, null, null)
-                    throw e
-                }
+            // Insert a single fresh entry
+            val cv = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, AUTO_BACKUP_FILE_NAME)
+                put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                put(MediaStore.Downloads.RELATIVE_PATH, relPath)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
+                ?: throw IOException("MediaStore insert returned null")
+            try {
+                resolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                    ?: throw IOException("openOutputStream returned null for $uri")
+                resolver.update(uri, ContentValues().apply {
+                    put(MediaStore.MediaColumns.IS_PENDING, 0)
+                }, null, null)
+            } catch (e: Exception) {
+                resolver.delete(uri, null, null)
+                throw e
             }
         }
 
