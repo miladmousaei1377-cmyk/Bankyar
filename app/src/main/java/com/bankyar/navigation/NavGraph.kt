@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.bankyar.BuildConfig
 import com.bankyar.data.PreferencesManager
 import com.bankyar.data.database.AppDatabase
 import com.bankyar.data.repository.UserRepository
@@ -62,7 +63,8 @@ fun BankYarNavGraph() {
     val isDarkMode by themeViewModel.isDarkMode.collectAsState()
     val context = LocalContext.current
     val prefs = remember { PreferencesManager(context) }
-    val hasSeenPermissionScreen by prefs.hasSeenPermissionScreen.collectAsState(initial = true)
+    val onboardingSlidesSeenVersion by prefs.onboardingSlidesSeenVersion.collectAsState(initial = Int.MAX_VALUE)
+    val shouldShowOnboarding = onboardingSlidesSeenVersion < BuildConfig.VERSION_CODE
     var userName by remember { mutableStateOf("کاربر") }
     val scope = rememberCoroutineScope()
 
@@ -107,9 +109,9 @@ fun BankYarNavGraph() {
     }
 
     // Redirect to permissions screen if user hasn't seen it yet
-    LaunchedEffect(loggedInUserId, isSessionActive, hasSeenPermissionScreen) {
+    LaunchedEffect(loggedInUserId, isSessionActive, shouldShowOnboarding) {
         val current = navController.currentBackStackEntry?.destination?.route
-        if (loggedInUserId > 0 && isSessionActive && !hasSeenPermissionScreen
+        if (loggedInUserId > 0 && isSessionActive && shouldShowOnboarding
             && current != null && current != Screen.Permissions.route
             && current != Screen.Lock.route && current != Screen.Auth.route) {
             navController.navigate(Screen.Permissions.route) { popUpTo(0) { inclusive = true } }
@@ -120,7 +122,7 @@ fun BankYarNavGraph() {
 
         composable(Screen.Auth.route) {
             AuthScreen(authViewModel) {
-                val dest = if (!hasSeenPermissionScreen) Screen.Permissions.route else Screen.Home.route
+                val dest = if (shouldShowOnboarding) Screen.Permissions.route else Screen.Home.route
                 navController.navigate(dest) {
                     popUpTo(Screen.Auth.route) { inclusive = true }
                 }
@@ -134,7 +136,7 @@ fun BankYarNavGraph() {
                 biometricEnabled = biometricEnabled,
                 onUnlocked = {
                     authViewModel.activateSession()
-                    val dest = if (!hasSeenPermissionScreen) Screen.Permissions.route else Screen.Home.route
+                    val dest = if (shouldShowOnboarding) Screen.Permissions.route else Screen.Home.route
                     navController.navigate(dest) { popUpTo(0) { inclusive = true } }
                 },
                 onSwitchAccount = {
