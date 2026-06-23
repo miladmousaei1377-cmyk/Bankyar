@@ -184,6 +184,11 @@ private fun WelcomeSlide(onNext: () -> Unit) {
                     title = "حریم خصوصی ۱۰۰٪",
                     description = "هیچ داده‌ای به سرور ارسال نمی‌شود — همه چیز روی دستگاه شماست."
                 )
+                OnboardingFeatureRow(
+                    icon = Icons.Default.Backup,
+                    title = "پشتیبان‌گیری خودکار",
+                    description = "هر ساعت یک نسخه پشتیبان از داده‌ها در پوشه Download ذخیره می‌شود."
+                )
             }
         }
 
