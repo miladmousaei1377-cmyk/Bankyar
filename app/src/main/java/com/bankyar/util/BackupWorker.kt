@@ -1,5 +1,6 @@
 package com.bankyar.util
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.os.Build
@@ -56,11 +57,28 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         private fun writeViaMediaStore(context: Context, json: String) {
             val resolver = context.contentResolver
             val relPath = "Download/$BACKUP_FOLDER/"
-            resolver.delete(
+            val baseName = AUTO_BACKUP_FILE_NAME.removeSuffix(".json")
+
+            // Delete ALL existing backup files (including renamed duplicates like "auto_backup (1).json")
+            // Query with LIKE to tolerate path variations across OEMs/Android versions
+            val idsToDelete = mutableListOf<Long>()
+            resolver.query(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                "${MediaStore.Downloads.RELATIVE_PATH}=? AND ${MediaStore.Downloads.DISPLAY_NAME}=?",
-                arrayOf(relPath, AUTO_BACKUP_FILE_NAME)
-            )
+                arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                arrayOf("$baseName%.json", "%$BACKUP_FOLDER%"),
+                null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) idsToDelete.add(cursor.getLong(0))
+            }
+            idsToDelete.forEach { id ->
+                resolver.delete(
+                    ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id),
+                    null, null
+                )
+            }
+
+            // Insert a single fresh entry
             val cv = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, AUTO_BACKUP_FILE_NAME)
                 put(MediaStore.Downloads.MIME_TYPE, "application/json")

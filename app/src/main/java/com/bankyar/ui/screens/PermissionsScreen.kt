@@ -1,9 +1,5 @@
 package com.bankyar.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -29,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -51,31 +46,13 @@ fun PermissionsScreen(onContinue: () -> Unit) {
 
     val pagerState = rememberPagerState(pageCount = { 2 })
 
-    val smsAutoRegisterEnabled by prefs.smsAutoRegisterEnabled.collectAsState(initial = false)
     var autoBackupEnabled by remember { mutableStateOf(false) }
-
-    var smsGranted by remember {
-        val receive = ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
-        val read = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
-        mutableStateOf(receive && read)
-    }
 
     LaunchedEffect(Unit) {
         val workInfo = WorkManager.getInstance(context)
             .getWorkInfosForUniqueWork(BackupWorker.WORK_NAME).get()
         autoBackupEnabled = workInfo.isNotEmpty() && workInfo.any {
             it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING
-        }
-    }
-
-    val permLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        val granted = results[Manifest.permission.RECEIVE_SMS] == true &&
-                      results[Manifest.permission.READ_SMS] == true
-        smsGranted = granted
-        if (granted) {
-            scope.launch { prefs.setSmsAutoRegisterEnabled(true) }
         }
     }
 
@@ -103,18 +80,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
                     scope.launch { pagerState.animateScrollToPage(1) }
                 })
                 1 -> SettingsSlide(
-                    smsGranted = smsGranted,
-                    smsAutoRegisterEnabled = smsAutoRegisterEnabled,
                     autoBackupEnabled = autoBackupEnabled,
-                    onSmsToggle = { enabled ->
-                        if (enabled && !smsGranted) {
-                            permLauncher.launch(
-                                arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS)
-                            )
-                        } else {
-                            scope.launch { prefs.setSmsAutoRegisterEnabled(enabled) }
-                        }
-                    },
                     onBackupToggle = { enabled ->
                         autoBackupEnabled = enabled
                         if (enabled) scheduleAutoBackup(context)
@@ -214,11 +180,6 @@ private fun WelcomeSlide(onNext: () -> Unit) {
                     description = "نمودارها و آمارهای ماهانه برای تصویر روشن از وضعیت مالی."
                 )
                 OnboardingFeatureRow(
-                    icon = Icons.Default.Sms,
-                    title = "شناسایی پیامک بانکی",
-                    description = "بانک‌یار پیامک‌های بانکی شما را می‌خواند و تراکنش‌ها را پیشنهاد می‌دهد — شما تأیید می‌کنید."
-                )
-                OnboardingFeatureRow(
                     icon = Icons.Default.Lock,
                     title = "حریم خصوصی ۱۰۰٪",
                     description = "هیچ داده‌ای به سرور ارسال نمی‌شود — همه چیز روی دستگاه شماست."
@@ -243,10 +204,7 @@ private fun WelcomeSlide(onNext: () -> Unit) {
 
 @Composable
 private fun SettingsSlide(
-    smsGranted: Boolean,
-    smsAutoRegisterEnabled: Boolean,
     autoBackupEnabled: Boolean,
-    onSmsToggle: (Boolean) -> Unit,
     onBackupToggle: (Boolean) -> Unit,
     onProceed: () -> Unit
 ) {
@@ -289,86 +247,6 @@ private fun SettingsSlide(
             lineHeight = 22.sp
         )
 
-        // SMS Banking card
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(2.dp)
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(Icons.Default.Sms, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                    Text(
-                        "ثبت خودکار تراکنش‌های بانکی",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 14.sp
-                    )
-                }
-
-                Text(
-                    "بانک‌یار پیامک‌های بانکی را پردازش می‌کند و مبلغ تراکنش را پیش‌نویس می‌کند. " +
-                    "هیچ چیزی بدون تأیید شما ثبت نمی‌شود و پیامک‌ها از دستگاه خارج نمی‌شوند.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 19.sp
-                )
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "فعال‌سازی پیامک بانکی",
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            "شناسایی تراکنش از پیامک",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Switch(
-                        checked = smsAutoRegisterEnabled,
-                        onCheckedChange = onSmsToggle
-                    )
-                }
-
-                if (smsGranted && smsAutoRegisterEnabled) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF2E7D32).copy(alpha = 0.1f))
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
-                        Text("ثبت خودکار پیامک بانکی فعال است", color = Color(0xFF2E7D32), fontSize = 12.sp)
-                    }
-                } else if (!smsGranted && smsAutoRegisterEnabled) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFE65100).copy(alpha = 0.1f))
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.Warning, null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
-                        Text("دسترسی پیامک لازم است", color = Color(0xFFE65100), fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-
         // Auto-backup card
         Card(
             Modifier.fillMaxWidth(),
@@ -388,7 +266,7 @@ private fun SettingsSlide(
                 }
 
                 Text(
-                    "هر ساعت یک فایل پشتیبان از داده‌های شما در پوشه Downloads دستگاه ذخیره می‌شود.",
+                    "هر ساعت یک فایل پشتیبان از داده‌های شما در پوشه Download دستگاه ذخیره می‌شود.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 19.sp
@@ -407,7 +285,7 @@ private fun SettingsSlide(
                             fontSize = 13.sp
                         )
                         Text(
-                            "پشتیبان هر ساعت در Downloads",
+                            "پشتیبان هر ساعت در Download",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
                         )
